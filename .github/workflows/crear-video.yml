@@ -1,0 +1,66 @@
+# Hace un video cuando el servidor de la página lo pide.
+name: Crear video
+
+on:
+  workflow_dispatch:
+    inputs:
+      video:
+        description: Id del video
+        required: true
+
+run-name: Video ${{ inputs.video }}
+
+permissions:
+  contents: read
+
+jobs:
+  crear:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      FISH_API_KEY: ${{ secrets.FISH_API_KEY }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_ALMACEN: ${{ secrets.HF_ALMACEN }}
+      CALIDAD: '720'
+      PYTHONIOENCODING: utf-8
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.navegadores
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Programas del sistema (ffmpeg y fuentes con emojis)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends ffmpeg fonts-noto-color-emoji fonts-noto-core fonts-noto-cjk fonts-liberation
+
+      - name: Dependencias
+        run: |
+          pip install -q -r requirements.txt
+          npm ci --omit=dev --no-audit --no-fund
+
+      - name: Guardar el navegador entre videos
+        uses: actions/cache@v4
+        with:
+          path: .navegadores
+          key: chromium-${{ hashFiles('package-lock.json') }}
+
+      - name: Navegador
+        run: npx playwright-core install --with-deps chromium
+
+      - name: Hacer el video
+        run: python trabajador.py "${{ inputs.video }}"
+
+      - name: Avisar si algo se cortó
+        if: failure() || cancelled()
+        run: python trabajador.py "${{ inputs.video }}" --fallo

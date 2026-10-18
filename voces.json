@@ -1,0 +1,18 @@
+{
+ "filo":      {"nombre": "Filo",       "id": "4975c323501c4ad4a27806cf9277d4b0", "color": "#f5b83d", "caracter": "chica alegre y entusiasta"},
+ "dazai":     {"nombre": "Dazai",      "id": "7fd90c67b9bf4938b61d3828d40b7f33", "color": "#c9946b", "caracter": "chico tranquilo, ingenioso y con humor suave"},
+ "ai":        {"nombre": "Ai Hoshino", "id": "14327d885582447bafab490ae2c3d6ce", "color": "#ff9ccf", "caracter": "chica brillante y encantadora, como una estrella"},
+ "emilia":    {"nombre": "Emilia",     "id": "be7a8d2d4d3c4648b6e5109d2c58e8fb", "color": "#bfe3ff", "caracter": "chica dulce, amable y paciente"},
+ "akane":     {"nombre": "Akane",      "id": "20b36cac84174cfc8efdf2096308244e", "color": "#8fb0ff", "caracter": "chica decidida y directa"},
+ "waguri":    {"nombre": "Waguri",     "id": "c183ee5187e34022b00fa2b05d2e81bd", "color": "#ffc3a8", "caracter": "chica tierna y cálida"},
+ "marin":     {"nombre": "Marin",      "id": "59f698f1ce56474bb14fd40ae0d0d660", "color": "#ffd36e", "caracter": "chica divertida y muy expresiva"},
+ "alya":      {"nombre": "Alya",       "id": "87603dd57ecb417e8c57fd4362af1cee", "color": "#d9e2ff", "caracter": "chica elegante, segura y algo seria"},
+ "masha":     {"nombre": "Masha",      "id": "7112a32d5e1c455e9b03e948df00d469", "color": "#ffb37a", "caracter": "chica relajada y cariñosa"},
+ "rem":       {"nombre": "Rem",        "id": "d3719c98fabb4866a259e5f74f18f6e6", "color": "#7fb2ff", "caracter": "chica educada, leal y servicial"},
+ "mitsuri":   {"nombre": "Mitsuri",    "id": "52c01894fc664c0a8460d75532d4a533", "color": "#ff9fc8", "caracter": "chica muy alegre y emotiva"},
+ "nezuko":    {"nombre": "Nezuko",     "id": "8dd8171a9dae4b9d8f1d9a232d687be8", "color": "#ff8fa3", "caracter": "chica tierna y valiente"},
+ "frieren":   {"nombre": "Frieren",    "id": "ce8248e10ec54d509f75945ad58ccfb6", "color": "#cfe8e0", "caracter": "chica serena y sabia"},
+ "hinata":    {"nombre": "Hinata",     "id": "1852abc47a6440049ed26898c387a1f9", "color": "#c7b8ff", "caracter": "chica tímida y amable"},
+ "mikasa":    {"nombre": "Mikasa",     "id": "2d23d4e3ebcc4beb84a8a32e5bbed412", "color": "#e0e6f0", "caracter": "chica fuerte, calmada y firme"},
+ "anya":      {"nombre": "Anya",       "id": "805f92603b9746f2a658b43d18dfec4d", "color": "#ffb8d9", "caracter": "niña curiosa y graciosa"}
+}

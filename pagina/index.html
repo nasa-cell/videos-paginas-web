@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Explícame la página</title>
+<meta name="description" content="Pega el enlace de una página web y recibe un video que la explica, con voces de anime.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232f6bff'/%3E%3Cpath d='M12 9l11 7-11 7z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/recursos/estilos.css">
+</head>
+<body>
+<div class="todo">
+  <header class="cabeza">
+    <div class="marca"><b></b>Explícame la página</div>
+    <div id="usuario" class="usuario" hidden>
+      <span class="foto" id="fotoUsuario"></span><span id="nombreUsuario"></span>
+      <button id="salir" class="enlace">Salir</button>
+    </div>
+  </header>
+
+  <!-- Sin sesión -->
+  <main id="portada" class="cuerpo" hidden>
+    <div>
+      <h1 class="titulo-animado">Tu enlace, convertido en un <span class="dorado">video explicado</span></h1>
+      <p class="bajada sube" style="animation-delay:.55s">Pega el enlace de cualquier página web pública. Voces de anime te cuentan de qué trata,
+      para qué se creó y cómo se usa, con zoom a cada botón. Tus videos quedan guardados en tu cuenta.</p>
+      <ul class="ventajas sube" style="animation-delay:.7s">
+        <li>Hasta 3 videos creándose a la vez</li>
+        <li>16 voces para elegir, una o dos por video</li>
+        <li>De 1 a 5 minutos</li>
+      </ul>
+    </div>
+    <section class="tarjeta acceso sube" style="animation-delay:.4s" aria-label="Entrar">
+      <div class="pestanas" role="tablist">
+        <button role="tab" aria-selected="true" data-modo="entrar">Entrar</button>
+        <button role="tab" aria-selected="false" data-modo="registro">Crear cuenta</button>
+      </div>
+      <div class="proveedores">
+        <a class="proveedor" id="conGoogle" href="/auth/google" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.4h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.2-2.1 3.5-5.1 3.5-8.7z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 7.9-2.9l-3.9-3c-1.1.7-2.4 1.2-4 1.2-3.1 0-5.7-2.1-6.6-4.9h-4v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.4 14.4a7.2 7.2 0 0 1 0-4.7V6.6h-4a12 12 0 0 0 0 10.8z"/><path fill="#EA4335" d="M12 4.8c1.7 0 3.3.6 4.5 1.8l3.4-3.4A12 12 0 0 0 1.4 6.6l4 3.1C6.3 6.9 8.9 4.8 12 4.8z"/></svg>Entrar con Google</a>
+        <a class="proveedor" id="conGithub" href="/auth/github" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .5a11.5 11.5 0 0 0-3.6 22.4c.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0c2.2-1.5 3.2-1.2 3.2-1.2.6 1.6.2 2.8.1 3.1.8.8 1.2 1.9 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.2c0 .3.2.7.8.6A11.5 11.5 0 0 0 12 .5z"/></svg>Entrar con GitHub</a>
+      </div>
+      <p class="separador" id="separador" hidden><span>o con tu correo</span></p>
+      <form id="formAcceso" novalidate>
+        <label class="campo-texto solo-registro" hidden><span class="etiqueta">Tu nombre <span class="contador" id="contadorNombre">0/40</span></span>
+          <input name="nombre" autocomplete="name" maxlength="40" minlength="2"></label>
+        <label class="campo-texto">Correo<input name="correo" type="email" autocomplete="email" maxlength="120" required></label>
+        <button type="button" class="sugerencia" id="sugerenciaCorreo" hidden></button>
+        <label class="campo-texto">Contraseña
+          <span class="con-ojo"><input name="clave" type="password" autocomplete="current-password" maxlength="64"><button type="button" class="ojo" data-ojo="clave" aria-label="Mostrar contraseña">Ver</button></span></label>
+        <div class="solo-registro" hidden><ul class="requisitos" id="reqRegistro" aria-label="La contraseña debe tener">
+          <li data-regla="largo">De 8 a 64 caracteres</li><li data-regla="numero">Un número</li><li data-regla="mayus">Una mayúscula</li>
+          <li data-regla="minus">Una minúscula</li><li data-regla="simbolo">Un símbolo, como @</li></ul></div>
+        <p class="error" id="errorAcceso" role="alert"></p>
+        <button class="principal brillo" type="submit" id="botonAcceso">Entrar</button>
+        <button type="button" class="enlace olvido" id="olvido" hidden>¿Olvidaste tu contraseña?</button>
+      </form>
+    </section>
+
+    <!-- Confirmar el correo de una cuenta nueva -->
+    <section class="tarjeta acceso confirmar" id="panelConfirmar" hidden aria-label="Confirmar correo">
+      <button type="button" class="enlace volver" id="volverRegistro">← Cambiar mis datos</button>
+      <svg class="sobre" viewBox="0 0 64 48" aria-hidden="true"><rect x="2" y="2" width="60" height="44" rx="7"/><path d="M4 6l28 22L60 6"/></svg>
+      <h2 class="recuperar-titulo">Confirma tu correo</h2>
+      <p class="explica" id="explicaConfirmar"></p>
+      <div class="casillas" id="casillasConf" role="group" aria-label="Código de 6 números">
+        <input inputmode="numeric" maxlength="1" autocomplete="one-time-code" aria-label="Número 1"><input inputmode="numeric" maxlength="1" aria-label="Número 2"><input inputmode="numeric" maxlength="1" aria-label="Número 3"><input inputmode="numeric" maxlength="1" aria-label="Número 4"><input inputmode="numeric" maxlength="1" aria-label="Número 5"><input inputmode="numeric" maxlength="1" aria-label="Número 6">
+      </div>
+      <p class="error" id="errorConfirmar" role="alert"></p>
+      <button class="principal brillo" type="button" id="botonConfirmar">Confirmar y crear mi cuenta</button>
+      <button class="enlace olvido" type="button" id="reenviarConfirmar" disabled>Reenviar código</button>
+    </section>
+
+    <!-- Recuperar la contraseña: correo, código y contraseña nueva -->
+    <section class="tarjeta acceso recuperar" id="panelRecuperar" hidden aria-label="Recuperar contraseña">
+      <button type="button" class="enlace volver" id="volverEntrar">← Volver a entrar</button>
+      <h2 class="recuperar-titulo">Recupera tu contraseña</h2>
+      <ol class="indicador" aria-label="Pasos">
+        <li class="ahora"><b>1</b>Correo</li><li><b>2</b>Código</li><li><b>3</b>Nueva</li>
+      </ol>
+      <div class="carril">
+        <div class="paso-rec" data-paso="1">
+          <p class="explica">Escribe el correo con el que creaste tu cuenta. Si está registrado, te mandamos un código de 6 números.</p>
+          <label class="campo-texto">Correo<input id="recCorreo" type="email" autocomplete="email" maxlength="120"></label>
+          <p class="error" id="recError1" role="alert"></p>
+          <button class="principal brillo" type="button" id="recEnviar">Enviarme el código</button>
+        </div>
+        <div class="paso-rec" data-paso="2" hidden>
+          <p class="explica" id="recExplica2"></p>
+          <div class="casillas" id="casillas" role="group" aria-label="Código de 6 números">
+            <input inputmode="numeric" maxlength="1" autocomplete="one-time-code" aria-label="Número 1"><input inputmode="numeric" maxlength="1" aria-label="Número 2"><input inputmode="numeric" maxlength="1" aria-label="Número 3"><input inputmode="numeric" maxlength="1" aria-label="Número 4"><input inputmode="numeric" maxlength="1" aria-label="Número 5"><input inputmode="numeric" maxlength="1" aria-label="Número 6">
+          </div>
+          <p class="error" id="recError2" role="alert"></p>
+          <button class="principal brillo" type="button" id="recComprobar">Comprobar código</button>
+          <button class="enlace olvido" type="button" id="recReenviar" disabled>Reenviar código</button>
+        </div>
+        <div class="paso-rec" data-paso="3" hidden>
+          <p class="explica">Código correcto. Ahora elige tu contraseña nueva.</p>
+          <label class="campo-texto">Contraseña nueva
+            <span class="con-ojo"><input id="recClave" type="password" autocomplete="new-password" maxlength="64"><button type="button" class="ojo" id="recOjo" aria-label="Mostrar contraseña">Ver</button></span></label>
+          <div class="fuerza" aria-hidden="true"><i id="recFuerza"></i></div>
+          <p class="pista" id="recPista">Debe cumplir estas reglas:</p>
+          <ul class="requisitos" id="reqRec" aria-label="La contraseña debe tener">
+          <li data-regla="largo">De 8 a 64 caracteres</li><li data-regla="numero">Un número</li><li data-regla="mayus">Una mayúscula</li>
+          <li data-regla="minus">Una minúscula</li><li data-regla="simbolo">Un símbolo, como @</li></ul>
+          <label class="campo-texto">Repítela<input id="recClave2" type="password" autocomplete="new-password" maxlength="64"></label>
+          <p class="error" id="recError3" role="alert"></p>
+          <button class="principal brillo" type="button" id="recGuardar">Guardar contraseña nueva</button>
+        </div>
+        <div class="paso-rec listo-rec" data-paso="4" hidden>
+          <svg class="visto-grande" viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="34"/><path d="M24 41l11 11 22-24"/></svg>
+          <h3>¡Contraseña cambiada!</h3>
+          <p class="explica">Ya entraste a tu cuenta con la contraseña nueva.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Con sesión -->
+  <nav class="pestanas-sitio" id="pestanasSitio" hidden aria-label="Secciones">
+    <a href="/" data-vista="crear">Crear video</a>
+    <a href="/almacen" data-vista="almacen">Mi almacén <b id="numeroAlmacen"></b></a>
+  </nav>
+  <main id="estudio" hidden>
+    <div class="cuerpo">
+      <div>
+        <h1 class="titulo-animado">Pega un enlace y te lo <span class="dorado">explicamos en video</span></h1>
+        <form id="formVideo" class="sube" style="animation-delay:.5s" novalidate>
+          <div class="campo"><input id="enlace" placeholder="https://www.ejemplo.com" aria-label="Enlace de la página" autocomplete="url" inputmode="url" maxlength="1000">
+            <button class="crear brillo" type="submit"><i class="llenado"></i><span>Crear video</span></button></div>
+          <p class="error" id="errorVideo" role="alert"></p>
+          <div class="subir" id="zonaSubir">
+            <div class="subir-arriba">
+              <button type="button" class="subir-boton" id="botonSubir"><span aria-hidden="true">＋</span> Agregar capturas <small>opcional</small></button>
+              <span class="limite" id="limiteCapturas"></span>
+            </div>
+            <input type="file" id="archivoCapturas" accept="image/png,image/jpeg,image/webp" multiple hidden>
+            <div class="miniaturas" id="miniaturas"></div>
+            <p class="pista" id="pistaSubir">Úsalo si la página pide iniciar sesión o si quieres mostrar algo especial: toma tú las capturas y súbelas o arrástralas aquí.</p>
+            <div class="soltar-aqui" aria-hidden="true">Suelta aquí tus capturas</div>
+          </div>
+          <div class="grupo"><h2>Duración</h2>
+            <div class="duracion" id="duracion"><i class="marca-dorada"></i>
+              <button type="button" data-min="1" aria-pressed="false">1 min<small>rápido</small></button>
+              <button type="button" data-min="2" aria-pressed="true">2 min<small>normal</small></button>
+              <button type="button" data-min="3" aria-pressed="false">3 min<small>detallado</small></button>
+              <button type="button" data-min="5" aria-pressed="false">5 min<small>completo</small></button>
+            </div></div>
+          <p class="resumen" id="resumen" aria-live="polite"></p>
+        </form>
+      </div>
+      <div class="columna-derecha">
+        <section class="tarjeta tarjeta-voces sube" style="animation-delay:.3s" aria-label="Voces">
+          <h2>Voces <small>toca una o dos · ▶ para escucharla</small></h2>
+          <div class="voces" id="voces"></div>
+        </section>
+        <section class="tarjeta creando sube" style="animation-delay:.42s" aria-label="Videos creándose">
+          <h2>Creándose ahora <span id="cupos"></span></h2>
+          <div id="enCurso"></div>
+          <p class="vacio" id="nadaEnCurso">Cuando pidas un video, aquí verás cómo avanza. Puedes cerrar la página: sigue creándose y te avisamos con un sonido.</p>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <main id="vistaAlmacen" hidden>
+    <section class="almacen" aria-label="Tus videos">
+      <div class="almacen-cabeza">
+        <h1>Mi almacén <span id="cuentaAlmacen"></span></h1>
+        <p>Tus videos terminados. Míralos, descárgalos o bórralos cuando quieras.</p>
+      </div>
+      <div class="rejilla" id="guardados"></div>
+      <div class="vacio almacen-vacio" id="almacenVacio">
+        <p>Todavía no tienes videos. El primero aparecerá aquí cuando termine.</p>
+        <a href="/" data-vista="crear" class="principal ir-crear">Crear mi primer video</a>
+      </div>
+    </section>
+  </main>
+</div>
+
+<dialog id="visor">
+  <div class="visor-dentro">
+    <video id="reproductor" controls playsinline></video>
+    <div class="visor-pie"><b id="visorTitulo"></b><span><a id="visorDescargar" class="principal">Descargar video</a><button id="cerrarVisor" class="secundario">Cerrar</button></span></div>
+  </div>
+</dialog>
+<div id="avisos" aria-live="polite"></div>
+<script src="/recursos/pagina.js"></script>
+</body>
+</html>

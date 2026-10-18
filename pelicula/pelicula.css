@@ -1,0 +1,87 @@
+@font-face { font-family: 'Titulo'; src: url('letras/TitanOne-Regular.ttf'); }
+@font-face { font-family: 'Texto'; src: url('letras/Baloo2.ttf'); font-weight: 400 800; }
+
+:root { --claro: #2f6bff; --oscuro: #0d2a6e; --acento: #f5b83d; --papel: #fffbea; --tinta: #0d2a6e; --letra: #0d2a6e; --sombra-letra: #fffbea; }
+* { box-sizing: border-box; margin: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: #000; }
+#lienzo { position: relative; width: 1920px; height: 1080px; overflow: hidden; font-family: 'Texto', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif; color: var(--tinta); }
+#lienzo.oscuro { --letra: #fffbea; --sombra-letra: rgba(0, 0, 0, .55); }
+#fondo { position: absolute; inset: 0; width: 1920px; height: 1080px; }
+
+.escena { position: absolute; inset: 0; display: none; transform-origin: 50% 50%; backface-visibility: hidden; }
+
+/* Título de cada escena */
+.rotulo { position: absolute; left: 50%; top: 30px; transform: translateX(-50%); white-space: nowrap;
+  font-family: 'Titulo'; font-size: 58px; background: var(--oscuro); color: var(--papel);
+  padding: 10px 40px 14px; border-radius: 22px; box-shadow: 8px 8px 0 var(--acento); perspective: 600px; }
+.letra { display: inline-block; white-space: pre; }
+.palabra { display: inline-block; white-space: nowrap; }
+.cursor-maquina { display: inline-block; width: .08em; height: .9em; background: var(--acento); margin-left: .05em; vertical-align: -.08em; }
+
+/* Ventana del navegador con la captura */
+.marco3d { position: absolute; left: 320px; top: 142px; width: 1280px; perspective: 2200px; }
+.navegador { width: 1280px; background: var(--papel); border: 8px solid var(--oscuro); border-radius: 26px; overflow: hidden;
+  box-shadow: 16px 16px 0 var(--oscuro), 0 40px 80px rgba(0, 0, 0, .35); transform-origin: 50% 60%; }
+.barra { height: 50px; display: flex; align-items: center; gap: 12px; padding: 0 18px; background: var(--oscuro); }
+.barra b { width: 16px; height: 16px; border-radius: 50%; background: #ff6b6b; }
+.barra b:nth-child(2) { background: #ffd23f; } .barra b:nth-child(3) { background: #5ad37a; }
+.barra span { margin-left: 14px; flex: 1; background: var(--papel); border-radius: 14px; padding: 3px 18px;
+  font-size: 22px; font-weight: 700; color: var(--oscuro); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vista { position: relative; width: 1264px; height: 711px; overflow: hidden; background: #fff; }
+.capa { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+.capa img { width: 1920px; height: 1080px; display: block; }
+.foco { position: absolute; border-radius: 26px; box-shadow: 0 0 0 4000px rgba(5, 10, 30, .5); opacity: 0; pointer-events: none; }
+.anillo { position: absolute; border: 9px solid var(--acento); border-radius: 22px; opacity: 0;
+  box-shadow: 0 0 0 6px var(--papel), 0 0 40px 10px rgba(255, 255, 255, .6); }
+.nota { position: absolute; white-space: nowrap; font-family: 'Titulo'; font-size: 40px; color: var(--oscuro); background: var(--acento);
+  padding: 6px 24px 10px; border-radius: 18px; border: 5px solid var(--oscuro); opacity: 0; transform-origin: 50% 100%; box-shadow: 6px 6px 0 var(--oscuro); }
+.reflejo { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,.55) 50%, transparent 65%);
+  transform: translateX(-120%); }
+.cursor { position: absolute; left: 0; top: 0; width: 64px; height: 64px; z-index: 3; }
+.onda { position: absolute; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; border: 8px solid var(--papel); opacity: 0; z-index: 2; }
+
+/* Portada y cierre */
+.grande { position: absolute; left: 110px; top: 190px; width: 900px; font-family: 'Titulo'; font-size: 150px; line-height: 1.02;
+  color: var(--letra); text-shadow: 8px 8px 0 var(--sombra-letra); perspective: 800px; }
+.grande .palabra { margin-right: .25em; }
+.lema { position: absolute; left: 116px; top: 520px; width: 820px; font-size: 52px; font-weight: 800; line-height: 1.15; color: var(--letra); text-shadow: 0 3px 12px var(--sombra-letra); }
+.ficha { position: absolute; left: 116px; top: 670px; font-family: 'Titulo'; font-size: 40px; background: var(--acento);
+  color: var(--oscuro); padding: 12px 34px 16px; border-radius: 40px; border: 6px solid var(--oscuro); }
+.foto { position: absolute; left: 1010px; top: 230px; width: 820px; border: 8px solid var(--oscuro); border-radius: 24px;
+  overflow: hidden; box-shadow: 14px 14px 0 var(--oscuro), 0 40px 80px rgba(0,0,0,.35); background: var(--papel); }
+.foto img { width: 100%; display: block; }
+.chispa { position: absolute; left: 0; top: 0; width: 46px; height: 46px; background: var(--papel);
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); }
+.confeti { position: absolute; left: 0; top: 0; width: 22px; height: 34px; border-radius: 5px; }
+
+/* Puntos */
+.lista { position: absolute; left: 260px; top: 190px; width: 1400px; display: grid; gap: 30px; }
+.punto { display: flex; align-items: center; gap: 34px; background: var(--papel); border: 7px solid var(--oscuro);
+  border-radius: 30px; padding: 22px 44px; box-shadow: 12px 12px 0 var(--oscuro); font-size: 50px; font-weight: 800; opacity: 0; }
+.punto .icono { font-size: 80px; line-height: 1; font-family: 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif; }
+
+/* Presentadora y subtítulo */
+#presentadora { position: absolute; left: 40px; bottom: 36px; width: 240px; height: 250px; z-index: 5; }
+.cara { position: absolute; left: 30px; top: 0; width: 180px; height: 180px; border-radius: 50%;
+  border: 8px solid var(--oscuro); display: grid; place-items: center; box-shadow: 8px 8px 0 var(--oscuro); }
+.inicial { font-family: 'Titulo'; font-size: 110px; color: var(--papel); text-shadow: 5px 5px 0 var(--oscuro); }
+.nombre { position: absolute; left: 0; right: 0; top: 160px; margin: auto; width: max-content; font-family: 'Titulo';
+  font-size: 38px; background: var(--papel); border: 6px solid var(--oscuro); border-radius: 18px; padding: 0 22px 4px; color: var(--oscuro); }
+.barras { position: absolute; left: 0; right: 0; top: 224px; display: flex; justify-content: center; align-items: center; gap: 8px; height: 30px; }
+.barras i { width: 12px; height: 8px; border-radius: 6px; background: var(--acento); box-shadow: 0 0 0 3px var(--oscuro); }
+
+#subtitulo { position: absolute; left: 330px; right: 80px; bottom: 40px; display: flex; justify-content: center; z-index: 5; }
+#subtitulo p { background: var(--papel); border: 7px solid var(--oscuro); border-radius: 26px; padding: 12px 34px 16px;
+  font-size: 44px; font-weight: 800; line-height: 1.2; text-align: center; max-width: 1400px; box-shadow: 10px 10px 0 var(--oscuro); }
+#subtitulo span { display: inline-block; margin: 0 .14em; color: rgba(13, 42, 110, .38); }
+#subtitulo span.dicha { color: var(--oscuro); }
+#subtitulo span.ahora { color: var(--claro); }
+
+#cortina { position: absolute; inset: 0; z-index: 8; display: none; background: var(--oscuro); }
+#cortina .franja { position: absolute; top: 0; bottom: 0; right: -60px; width: 60px; background: var(--acento); }
+#mosaico, #franjas { position: absolute; inset: 0; z-index: 8; display: none; pointer-events: none; }
+#mosaico i { position: absolute; width: 12.6%; height: 20.2%; }
+#franjas div { position: absolute; inset: 0; }
+#franjas div:first-child { background: var(--oscuro); } #franjas div:last-child { background: var(--acento); }
+#avance { position: absolute; left: 0; right: 0; top: 0; height: 12px; background: rgba(0, 0, 0, .25); z-index: 9; }
+#avance div { height: 100%; width: 0; background: var(--acento); }

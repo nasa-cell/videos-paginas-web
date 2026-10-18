@@ -1,0 +1,33 @@
+# La página en Render (plan gratis). Los videos los hace GitHub Actions.
+services:
+  - type: web
+    name: explicame-la-pagina
+    runtime: python
+    plan: free
+    region: virginia
+    buildCommand: pip install -r requirements-web.txt
+    startCommand: gunicorn -w 1 --threads 8 -b 0.0.0.0:$PORT --timeout 120 servidor.app:app
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: MODO_TRABAJO
+        value: github
+      - key: GH_REPO
+        value: nasa-cell/videos-paginas-web
+      - key: HF_ALMACEN
+        value: fabian2wws/explicame-almacen
+      - key: BASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: GH_TOKEN
+        sync: false
+      - key: HF_TOKEN
+        sync: false
+      - key: SMTP_USUARIO
+        sync: false
+      - key: SMTP_CLAVE
+        sync: false

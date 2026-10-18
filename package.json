@@ -1,0 +1,6 @@
+{
+  "name": "explicame-la-pagina",
+  "private": true,
+  "description": "Convierte el enlace de una página web en un video explicado con voces.",
+  "dependencies": { "playwright-core": "1.63.0" }
+}

@@ -1,0 +1,8 @@
+node_modules/
+__pycache__/
+datos/
+almacen/
+trabajos/
+pruebas-voces/
+*.log
+subidas/
