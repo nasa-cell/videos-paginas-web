@@ -82,6 +82,23 @@ def activos_de(usuario_id):
     return fila['n']
 
 
+# Espacio del almacén: el total se reparte en partes iguales entre los usuarios, con un mínimo y un
+# máximo por persona. Cada uno solo gasta su propia parte, así nadie llena el espacio de otro.
+ALMACEN_TOTAL_MB = int(os.environ.get('ALMACEN_TOTAL_MB', '20000'))
+CUOTA_MIN_MB = int(os.environ.get('CUOTA_MIN_MB', '200'))
+CUOTA_MAX_MB = int(os.environ.get('CUOTA_MAX_MB', '1000'))
+MB_POR_MINUTO = 15
+
+
+def espacio_de(usuario_id):
+    """(bytes usados, bytes de su cuota). Los videos que se están creando cuentan con su tamaño estimado."""
+    usuarios = max(1, base.uno('SELECT COUNT(*) AS n FROM usuarios')['n'])
+    cuota_mb = max(CUOTA_MIN_MB, min(CUOTA_MAX_MB, ALMACEN_TOTAL_MB // usuarios))
+    fila = base.uno("SELECT COALESCE(SUM(tamano), 0) AS usado FROM videos WHERE usuario_id = ? AND estado = 'listo'", (usuario_id,))
+    creando = base.uno("SELECT COALESCE(SUM(minutos), 0) AS m FROM videos WHERE usuario_id = ? AND estado IN ('preparando', 'en_fila', 'trabajando')", (usuario_id,))
+    return int(fila['usado']) + int(creando['m'] * MB_POR_MINUTO * 1e6), cuota_mb * 1_000_000
+
+
 def guardados_de(usuario_id):
     return base.uno("SELECT COUNT(*) AS n FROM videos WHERE usuario_id = ? AND estado = 'listo'", (usuario_id,))['n']
 

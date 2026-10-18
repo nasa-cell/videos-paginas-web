@@ -597,6 +597,7 @@
     const enCurso = r.videos.filter(v => ['preparando', 'en_fila', 'trabajando', 'error'].includes(v.estado));
     const listos = r.videos.filter(v => v.estado === 'listo');
     pintarEnCurso(enCurso, r.limite);
+    pintarEspacio(r.usado, r.cuota);
     pintarAlmacen(listos, r.guardados_max);
     // Avisar una sola vez por video, aunque haya varias pestañas abiertas
     r.videos.forEach(v => {
@@ -665,6 +666,18 @@
   async function quitar(id, sinPreguntar) {
     if (!sinPreguntar && !confirm('¿Cancelar este video? Se pierde lo que lleva hecho.')) return;
     try { await api(`/api/videos/${id}`, { method: 'DELETE' }); revisar(); } catch (err) { avisar(err.message, true); }
+  }
+
+  // Espacio propio de cada usuario en el almacén
+  const megas = b => b >= 1e9 ? `${(b / 1e9).toFixed(1).replace('.0', '')} GB` : `${Math.round(b / 1e6)} MB`;
+  function pintarEspacio(usado, cuota) {
+    if (!cuota) return;
+    const parte = Math.min(1, usado / cuota), barra = $('#barraEspacio');
+    $('#espacio').hidden = false;
+    barra.style.transform = `scaleX(${parte})`;
+    barra.classList.toggle('lleno', parte >= .9);
+    barra.parentElement.setAttribute('aria-valuenow', Math.round(parte * 100));
+    $('#textoEspacio').textContent = `Usaste ${megas(usado)} de ${megas(cuota)}` + (parte >= .9 ? ' · casi lleno: borra algún video para seguir creando' : '');
   }
 
   function pintarAlmacen(lista, maximo) {

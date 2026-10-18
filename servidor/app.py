@@ -85,7 +85,9 @@ def mis_videos():
     if trabajos.MODO == 'github':
         trabajos.vencidos()
     filas = base.todos('SELECT * FROM videos WHERE usuario_id = ? ORDER BY creado DESC LIMIT 100', (usuario['id'],))
-    return jsonify(videos=[publico(v) for v in filas], limite=trabajos.MAX_POR_USUARIO, guardados_max=trabajos.MAX_GUARDADOS, ahora=time.time())
+    usado, cuota = trabajos.espacio_de(usuario['id'])
+    return jsonify(videos=[publico(v) for v in filas], limite=trabajos.MAX_POR_USUARIO, guardados_max=trabajos.MAX_GUARDADOS,
+                   usado=usado, cuota=cuota, ahora=time.time())
 
 
 def convertir_capturas(archivos, destino):
@@ -139,9 +141,12 @@ def nuevo_video():
         return jsonify(error=problema), 400
     if trabajos.activos_de(usuario['id']) >= trabajos.MAX_POR_USUARIO:
         return jsonify(error=f'Ya tienes {trabajos.MAX_POR_USUARIO} videos creándose. Espera a que termine uno.'), 409
-    # Tope de todo el almacén, para que no crezca sin control (se cambia con MAX_TOTAL_VIDEOS).
-    if base.uno("SELECT COUNT(*) AS n FROM videos WHERE estado = 'listo'")['n'] >= int(os.environ.get('MAX_TOTAL_VIDEOS', '400')):
-        return jsonify(error='El almacén de la página está lleno por ahora. Intenta más tarde.'), 503
+    # Cada usuario tiene su propia parte del almacén: el video nuevo tiene que caber en la suya.
+    usado, cuota = trabajos.espacio_de(usuario['id'])
+    if usado + minutos * trabajos.MB_POR_MINUTO * 1_000_000 > cuota:
+        libre = max(0, cuota - usado) / 1e6
+        return jsonify(error=f'Tu almacén está casi lleno (te quedan {libre:.0f} MB y un video de {minutos:g} min ocupa unos '
+                             f'{minutos * trabajos.MB_POR_MINUTO:g} MB). Borra algún video o elige uno más corto.'), 409
     if trabajos.guardados_de(usuario['id']) >= trabajos.MAX_GUARDADOS:
         return jsonify(error=f'Tu almacén está lleno ({trabajos.MAX_GUARDADOS} videos). Borra alguno para crear otro.'), 409
     limite = LIMITE_CAPTURAS[minutos]
