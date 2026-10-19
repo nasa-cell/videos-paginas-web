@@ -680,6 +680,35 @@
     $('#textoEspacio').textContent = `Usaste ${megas(usado)} de ${megas(cuota)}` + (parte >= .9 ? ' · casi lleno: borra algún video para seguir creando' : '');
   }
 
+  // Pregunta dentro de la misma tarjeta antes de borrar; solo una tarjeta pregunta a la vez.
+  function preguntarBorrar(t, v) {
+    document.querySelectorAll('.guardado .pregunta-borrar').forEach(c => c.cerrar());
+    const capa = document.createElement('div');
+    capa.className = 'pregunta-borrar';
+    capa.setAttribute('role', 'alertdialog');
+    capa.setAttribute('aria-label', '¿Borrar este video?');
+    capa.innerHTML = `<span class="icono-borrar" aria-hidden="true">🗑</span><b>¿Borrar este video?</b>
+      <small>Se quitará de tu almacén. No se puede recuperar.</small>
+      <div class="botones-borrar"><button type="button" class="borrar-no">No</button><button type="button" class="borrar-si">Sí, borrar</button></div>`;
+    const no = capa.querySelector('.borrar-no'), si = capa.querySelector('.borrar-si');
+    capa.cerrar = () => { capa.remove(); t.querySelector('.secundario').focus(); };
+    no.addEventListener('click', capa.cerrar);
+    capa.addEventListener('keydown', e => { if (e.key === 'Escape') capa.cerrar(); });
+    si.addEventListener('click', async () => {
+      si.disabled = no.disabled = true; si.textContent = 'Borrando…';
+      try {
+        await api(`/api/videos/${v.id}`, { method: 'DELETE' });
+        t.classList.add('saliendo');
+        setTimeout(() => { t.remove(); revisar(); }, 280);
+      } catch (err) {
+        capa.remove();
+        avisar(err.message, true);
+      }
+    });
+    t.appendChild(capa);
+    no.focus();
+  }
+
   function pintarAlmacen(lista, maximo) {
     const caja = $('#guardados');
     $('#almacenVacio').hidden = lista.length > 0;
@@ -699,10 +728,7 @@
         <time class="fecha" datetime="${new Date(v.creado * 1000).toISOString()}">Creado el ${fecha(v.creado)}</time>
         <div class="botones"><a href="/api/videos/${v.id}/archivo?descargar=1">Descargar</a><button class="secundario" aria-label="Borrar">Borrar</button></div></div>`;
       t.querySelector('.miniatura').addEventListener('click', () => ver(v));
-      t.querySelector('.secundario').addEventListener('click', async () => {
-        if (!confirm('¿Borrar este video de tu almacén? No se puede deshacer.')) return;
-        try { await api(`/api/videos/${v.id}`, { method: 'DELETE' }); t.remove(); revisar(); } catch (err) { avisar(err.message, true); }
-      });
+      t.querySelector('.secundario').addEventListener('click', () => preguntarBorrar(t, v));
       caja.appendChild(t);
     });
     caja.querySelectorAll('.guardado').forEach(t => { if (!vistos.has(t.dataset.id)) t.remove(); });
