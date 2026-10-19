@@ -138,6 +138,19 @@ async function abrir(pagina, direccion) {
   return {};
 }
 
+// Algunas páginas (anuncios, letras que no terminan de cargar) cuelgan la foto normal:
+// entonces se saca directo con Chrome, que no espera nada.
+async function fotografiar(pagina, archivo) {
+  try {
+    await pagina.screenshot({ path: archivo, type: 'jpeg', quality: 86, timeout: 8000 });
+  } catch {
+    const cdp = await pagina.context().newCDPSession(pagina);
+    const foto = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 86 });
+    fs.writeFileSync(archivo, Buffer.from(foto.data, 'base64'));
+    await cdp.detach().catch(() => {});
+  }
+}
+
 async function medir(pagina) {
   return pagina.evaluate(() => {
     const visible = e => {
@@ -153,10 +166,52 @@ async function medir(pagina) {
       elementos.push({ tipo: e.tagName.toLowerCase(), texto: texto.slice(0, 80),
         caja: [Math.max(0, r.left), Math.max(0, r.top), Math.min(r.width, innerWidth), Math.min(r.height, innerHeight)].map(Math.round) });
     });
+    // Datos con cifras (porcentajes, montos, cantidades, fechas): caja justo alrededor del dato,
+    // para que el video señale el número del que habla y no el título.
+    const datos = [], vistos = new Set();
+    const DATO = /(?:S\/\s?|US\$\s?|\$\s?|€\s?)?\d[\d.,]*(?:\s?%|\s(?:por\s?ciento|millones|millón|mil|soles|dólares|euros|kilómetros|km|kv|mw|kw|metros|hectáreas|habitantes|familias|viviendas|personas|localidades|años|horas|minutos)\b)?(?:\s+de\s+(?:soles|dólares|habitantes|personas|familias))?/gi;
+    const recorrer = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+      acceptNode: n => /\d/.test(n.textContent) && !n.parentElement.closest('script,style,noscript,nav,footer,select,option,time') ? 1 : 2,
+    });
+    for (let n = recorrer.nextNode(); n && datos.length < 30; n = recorrer.nextNode()) {
+      const texto = n.textContent;
+      for (const m of texto.matchAll(DATO)) {
+        if (m[0].replace(/\D/g, '').length < 2 && !/%/.test(m[0])) continue;
+        // Una cifra sola («22») se entiende mejor con las dos palabras de antes («trabajo número 22»).
+        let inicio = m.index;
+        const fin = m.index + m[0].replace(/[\s.,;:]+$/, '').length;
+        if (!/[a-z%$€/]/i.test(m[0])) {
+          const antes = texto.slice(Math.max(0, inicio - 30), inicio).match(/(\S+\s+){1,2}$/);
+          if (antes) inicio -= antes[0].length;
+        }
+        const rango = document.createRange();
+        rango.setStart(n, inicio); rango.setEnd(n, fin);
+        const r = rango.getBoundingClientRect();
+        if (r.width < 8 || r.height < 8 || r.top < 0 || r.bottom > innerHeight || r.left < 0 || r.right > innerWidth) continue;
+        const s = getComputedStyle(n.parentElement);
+        if (s.visibility === 'hidden' || +s.opacity < .05) continue;
+        const clave = Math.round(r.left) + ':' + Math.round(r.top);
+        if (vistos.has(clave)) continue;
+        vistos.add(clave);
+        const contexto = (texto.slice(Math.max(0, m.index - 40), m.index + m[0].length + 40)).replace(/\s+/g, ' ').trim();
+        datos.push({ tipo: 'dato', texto: contexto.slice(0, 100),
+          caja: [r.left - 6, r.top - 4, r.width + 12, r.height + 8].map(Math.round) });
+      }
+    }
+    // Párrafos visibles: para señalar una idea que no tiene cifra.
+    const parrafos = [...document.body.querySelectorAll('p, li, blockquote, figcaption, div, span')].filter(e => {
+      const propio = [...e.childNodes].filter(x => x.nodeType === 3).map(x => x.textContent).join('').trim();
+      if (propio.length < 60 || e.closest('nav,footer,script,style')) return false;
+      const r = e.getBoundingClientRect();
+      return r.top >= 0 && r.bottom <= innerHeight && r.width > 40;
+    }).slice(0, 12).map(e => {
+      const r = e.getBoundingClientRect();
+      return { tipo: 'parrafo', texto: e.innerText.replace(/\s+/g, ' ').trim().slice(0, 100), caja: [r.left, r.top, r.width, r.height].map(Math.round) };
+    });
     const enVista = [...document.body.querySelectorAll('*')].filter(e => {
       const r = e.getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0 && e.children.length === 0;
     }).map(e => e.innerText || '').join(' ').replace(/\s+/g, ' ');
-    return { titulo: document.title, texto: enVista.slice(0, 2500), elementos: elementos.slice(0, 60) };
+    return { titulo: document.title, texto: enVista.slice(0, 2500), elementos: [...elementos.slice(0, 50), ...datos.slice(0, 25), ...parrafos] };
   });
 }
 
@@ -217,7 +272,9 @@ async function medir(pagina) {
     const forma = await pagina.evaluate(() => ({
       alto: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight),
       // Párrafos largos: señal de artículo, noticia o blog (página que informa sobre un tema).
-      parrafos: [...document.querySelectorAll('p')].filter(p => (p.innerText || '').trim().length > 80).length,
+      // Bloques con texto largo propio (párrafos aunque la página no use <p>).
+      parrafos: [...document.body.querySelectorAll('*')].filter(e => !/^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE)$/.test(e.tagName) &&
+        [...e.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim().length > 80).length,
     })).catch(() => ({ alto: 1080, parrafos: 0 }));
     const esArticulo = resultado.paginas.length === 0 && forma.parrafos >= 8 && forma.alto > 1080 * 3;
     if (process.env.DEPURAR) console.error('forma', pagina.url(), JSON.stringify(forma), esArticulo);
@@ -233,13 +290,18 @@ async function medir(pagina) {
       posiciones = Array.from({ length: partes }, (_, i) => i * 1000);
     }
     for (let parte = 0; parte < posiciones.length && resultado.paginas.length < MAXIMO_CAPTURAS; parte++) {
-      await pagina.evaluate(y => scrollTo(0, y), posiciones[parte]).catch(() => {});
+      // Sin desplazamiento suave: la página queda quieta en su lugar antes de la foto.
+      await pagina.evaluate(y => scrollTo({ top: y, behavior: 'instant' }), posiciones[parte]).catch(() => {});
       await pagina.waitForTimeout(450);
-      const datos = await medir(pagina).catch(() => null);
-      if (!datos) break;
+      // Se esperan las letras de la página: si cambian después de medir, las cajas quedan corridas.
+      await pagina.evaluate(() => Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 4000))])).catch(() => {});
+      await pagina.waitForTimeout(150);
       const numero = resultado.paginas.length + 1;
       const archivo = `pagina-${numero}.jpg`;
-      await pagina.screenshot({ path: path.join(carpeta, 'capturas', archivo), type: 'jpeg', quality: 86 });
+      // Primero la foto y enseguida la medida, para que las cajas coincidan con lo que se ve.
+      await fotografiar(pagina, path.join(carpeta, 'capturas', archivo));
+      const datos = await medir(pagina).catch(() => null);
+      if (!datos) break;
       resultado.paginas.push({ numero, direccion: pagina.url(), parte: parte + 1, archivo, ...datos });
       avance(Math.round(resultado.paginas.length / MAXIMO_CAPTURAS * 100), `Página ${numero}: ${datos.titulo.slice(0, 50)}`);
     }

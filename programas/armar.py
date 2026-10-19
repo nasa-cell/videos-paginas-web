@@ -17,6 +17,8 @@ SONIDO_TRANSICION = {'mosaico': 'golpes', 'falla': 'falla', 'viaje': 'viento', '
                      'cubo': 'zas', 'rebanadas': 'golpes', 'remolino': 'viento', 'rombo': 'burbuja', 'telon': 'papel', 'estrella': 'brillo', 'caida': 'pop'}
 # Cómo se señalan los botones en las capturas; se van turnando en cada video.
 EFECTOS = ['anillo', 'trazo', 'esquinas', 'marcador', 'flecha', 'pulso', 'lupa', 'subrayado', 'destellos']
+# Para datos y párrafos (texto dentro de otro texto): efectos que no tapan las palabras de al lado.
+EFECTOS_TEXTO = ['subrayado', 'marcador', 'trazo', 'anillo', 'esquinas', 'pulso']
 
 
 def volumen(archivo):
@@ -38,6 +40,12 @@ def palabras_con_tiempo(texto, segundos):
         salida.append([p, round(t / total * segundos, 3)])
         t += w
     return salida
+
+
+def elegir_efecto(marcas, n):
+    if marcas and all(m.get('tipo') in ('dato', 'parrafo') for m in marcas):
+        return EFECTOS_TEXTO[n % len(EFECTOS_TEXTO)]
+    return EFECTOS[n % len(EFECTOS)]
 
 
 def sin_repetir(lista, opciones, n):
@@ -77,7 +85,7 @@ if __name__ == '__main__':
         if e['tipo'] == 'captura':
             p = contenido['paginas'][e['pagina'] - 1]
             escena.update({'imagen': p['archivo'], 'direccion': p['direccion'], 'marcas': [],
-                           'efecto': EFECTOS[(efecto_inicial + capturas_vistas) % len(EFECTOS)]})
+                           'efecto': elegir_efecto(e.get('resaltar', []), efecto_inicial + capturas_vistas)})
             capturas_vistas += 1
             for k, m in enumerate(e.get('resaltar', [])[:2]):
                 clic = habla + voz * (0.18 if k == 0 else 0.58)

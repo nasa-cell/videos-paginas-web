@@ -1,7 +1,7 @@
 # Paso 2: Gemini mira las capturas y el texto de la página y escribe el guion del video.
 # Uso: python guion.py <carpeta del trabajo> <voces separadas por coma> <minutos>
 # La clave se lee de la variable de entorno GEMINI_API_KEY.
-import base64, json, os, sys, time, urllib.error, urllib.request
+import base64, json, os, re, sys, time, urllib.error, urllib.request
 
 MODELOS = ['gemini-flash-latest', 'gemini-flash-lite-latest']
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -17,6 +17,9 @@ LETRAS = ['cae', 'ola', 'maquina', 'revuelto', 'giro3d', 'enfoque', 'rebote', 'b
 INSTRUCCIONES = """Eres el guionista de un video explicativo de {MINUTOS} minuto(s) sobre una página web.
 Te doy capturas de la página (1920x1080; algunas son partes más abajo de la misma página) y, por
 cada una, su texto visible y una lista numerada de elementos con su caja [x, y, ancho, alto].
+Tipos de elemento: <h1>/<h2>/<h3> títulos, <a>/<button> enlaces y botones, <img> imágenes,
+<dato> una cifra exacta de la página (porcentaje, monto, cantidad, fecha) con el texto que la rodea,
+<parrafo> un párrafo con una idea.
 
 PRIMERO decide qué tipo de página es:
 - "informativa": su objetivo es dar a conocer un tema (artículo, enciclopedia, noticia, blog, página
@@ -34,6 +37,9 @@ lo digas. No inventes nada. Escribe en español latino, cálido y claro. Los nú
 como se dicen ("quince soles", no "S/ 15"). No repitas palabras en una misma frase.
 
 Cómo escribir la narración (muy importante):
+- La portada dice CLARAMENTE de qué o de quién trata la página, con el nombre completo tal como
+  aparece en el título. Si es una noticia: "Esta noticia trata sobre <protagonista>, que <qué pasó>".
+  Si es un tema: "Esta página explica <tema>". Si es un servicio: "<Sitio> sirve para <qué>".
 - La portada engancha: el personaje se presenta en pocas palabras y dice lo más interesante del sitio
   o del tema (una pregunta o un dato que llame la atención). Nada de "Hola a todos" genérico.
 - Cada escena aporta algo NUEVO y concreto sacado de la página: un nombre, una sección, una cifra,
@@ -80,7 +86,29 @@ conocido: quién y en qué año); si es "informativa", después de la portada di
 importa, y el cierre resume lo aprendido; la mayoría de escenas son "captura", repartidas en todas las capturas; agrega escenas
 "puntos" para resumir (una cada 6 escenas más o menos); en total unas {PALABRAS} palabras de
 narración; no repitas la misma transición ni la misma animación de letras en escenas seguidas;
-lo que se resalta debe ser lo que la narración menciona."""
+lo que se resalta debe ser lo que la narración menciona.
+
+Qué resaltar (MUY importante, revisa cada escena "captura"):
+- Si la narración dice una cifra, porcentaje, monto, cantidad o fecha, resalta el <dato> que tiene
+  ESA cifra en esa captura, y en "nota" escribe la cifra corta (ej.: "122 000 habitantes", "S/ 136 millones").
+- Si la narración cuenta una idea sin cifra, resalta el <parrafo> o la <img> donde está esa idea.
+- Resalta el título (<h1>) SOLO en la escena que presenta de qué trata la página. Nunca resaltes el
+  título cuando hablas de un dato o de una idea que está en otra parte.
+- Elige la captura ("pagina") donde se ve lo que se cuenta: si la cifra está en la captura 3, usa la 3.
+- Si la narración dice dos cifras, resalta las dos (máximo 2 por escena), en el orden en que se dicen.
+- Antes de responder, revisa que cada número dicho en la narración esté resaltado con su <dato>."""
+
+
+def buscar_dato(elementos, elegido, nota):
+    """Si la nota trae una cifra y lo elegido no la tiene (por ejemplo, el título), se señala
+    el <dato> de esa captura con la misma cifra."""
+    cifras = re.sub(r'\D', '', nota)
+    if len(cifras) < 2 or cifras in re.sub(r'\D', '', elegido.get('texto', '')):
+        return elegido
+    for e in elementos:
+        if e.get('tipo') == 'dato' and cifras in re.sub(r'\D', '', e.get('texto', '')):
+            return e
+    return elegido
 
 
 def leer_clave():
@@ -208,7 +236,8 @@ def revisar(guion, contenido, claves):
                     if not isinstance(m, dict):
                         continue
                     if isinstance(m.get('elemento'), int) and 1 <= m['elemento'] <= len(p['elementos']):
-                        marcas.append({'caja': p['elementos'][m['elemento'] - 1]['caja'], 'nota': str(m.get('nota', ''))[:28]})
+                        elegido = buscar_dato(p['elementos'], p['elementos'][m['elemento'] - 1], str(m.get('nota', '')))
+                        marcas.append({'caja': elegido['caja'], 'nota': str(m.get('nota', ''))[:28], 'tipo': elegido.get('tipo', '')})
                     elif p.get('subida') and isinstance(m.get('caja_1000'), list) and len(m['caja_1000']) == 4 \
                             and all(isinstance(v, (int, float)) for v in m['caja_1000']):
                         # Posición que Gemini vio en la imagen (0 a 1000), pasada a píxeles de 1920x1080 con un margen.

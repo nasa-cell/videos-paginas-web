@@ -253,6 +253,9 @@
   const luz = hex => { const n = parseInt(hex.replace('#', '').padEnd(6, '0').slice(0, 6), 16); return (0.299 * (n >> 16) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255; };
   const usaColorPagina = ['rayos', 'comic', 'burbujas', 'hexagonos', 'geometria'].includes(D.fondo);
   lienzo.classList.toggle('oscuro', usaColorPagina ? luz(['burbujas', 'hexagonos'].includes(D.fondo) ? OSCURO : CLARO) < 0.55 : fondo.oscuro);
+  // Color para señalar: el de la página, salvo que sea casi blanco o casi negro (no se vería sobre el texto).
+  const luzAcento = luz(ACENTO);
+  document.documentElement.style.setProperty('--resalte', luzAcento > .78 || luzAcento < .15 ? '#f5b83d' : ACENTO);
   const pincel = document.getElementById('fondo').getContext('2d');
   const estadoFondo = {};
 
@@ -450,7 +453,7 @@
       crear(g, [x, y, w, h]) {
         const lineas = [0, 1].map(j => {
           const e = $(g, 'div', 'subrayado' + (j ? ' segunda' : ''));
-          Object.assign(e.style, { left: x - 10 + j * 30 + 'px', top: y + h + 10 + j * 22 + 'px', width: w + 20 - j * 60 + 'px' });
+          Object.assign(e.style, { left: x + 2 + j * 14 + 'px', top: y + h - 3 + j * 9 + 'px', width: Math.max(10, w - 4 - j * 28) + 'px' });
           return e;
         });
         return { lineas };
@@ -547,14 +550,21 @@
 
   // ---------------- Cámara de las capturas ----------------
   const BASE = 1264 / 1920;
+  // Zona que debe verse entera al acercar: lo señalado más su nota (arriba o abajo).
+  const conNota = m => {
+    const [x, y, w, h] = m.caja;
+    if (!m.nota) return [x - 30, y - 30, w + 60, h + 60];
+    const x0 = Math.min(x - 30, x + w / 2 - 150), x1 = Math.max(x + w + 30, x + w / 2 + 150);
+    return y > 140 ? [x0, y - 125, x1 - x0, h + 155] : [x0, y - 30, x1 - x0, h + 140];
+  };
   const enfoque = caja => {
     if (!caja) return { z: 1, cx: 960, cy: 540 };
     const [x, y, w, h] = caja;
-    return { z: limitar(Math.min(1264 * .55 / (w * BASE), 711 * .45 / (h * BASE)), 1, 1.9), cx: x + w / 2, cy: y + h / 2 };
+    return { z: limitar(Math.min(1264 * .55 / (w * BASE), 711 * .45 / (h * BASE)), 1, 2.6), cx: x + w / 2, cy: y + h / 2 };
   };
   const camara = (v, t) => {
     const s = v.s, llaves = [{ t: s.inicio, ...enfoque() }];
-    s.marcas.forEach(m => { llaves.push({ ...llaves[llaves.length - 1], t: m.clic - 1.0 }); llaves.push({ t: m.clic - .25, ...enfoque(m.caja) }); });
+    s.marcas.forEach(m => { llaves.push({ ...llaves[llaves.length - 1], t: m.clic - 1.0 }); llaves.push({ t: m.clic - .25, ...enfoque(conNota(m)) }); });
     const fin = s.inicio + s.largo;
     llaves.push({ ...llaves[llaves.length - 1], t: fin - 1.3 });
     llaves.push({ ...enfoque(), z: 1.04, t: fin - .3 });
@@ -577,7 +587,8 @@
     let px = 1120, py = 640, presion = 0, anterior = { x: 1120, y: 640 };
     s.marcas.forEach((m, i) => {
       const [x, y, w, h] = m.caja;
-      const destino = { x: tx + (x + w * .62) * e, y: ty + (y + h * .6) * e };
+      // La punta del cursor toca la esquina de abajo a la derecha: así no tapa el dato.
+      const destino = { x: tx + (x + w + 2) * e, y: ty + (y + h + 2) * e };
       const k = suave(tramo(t, m.clic - .75, m.clic - .08));
       if (t >= m.clic - .75) { px = anterior.x + (destino.x - anterior.x) * k; py = anterior.y + (destino.y - anterior.y) * k; }
       if (t >= m.clic) { px = destino.x; py = destino.y; }
