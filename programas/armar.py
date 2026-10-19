@@ -9,9 +9,14 @@ ANTES, DESPUES = 0.6, 0.55
 EXTRA = {'portada': 1.3, 'cierre': 2.6}
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VOCES = json.load(open(os.path.join(RAIZ, 'voces.json'), encoding='utf-8'))
-TRANSICIONES = ['barrido', 'zoom', 'deslizar', 'giro', 'circulo', 'tinta', 'persianas', 'mosaico', 'falla', 'viaje', 'hoja', 'doble']
-LETRAS = ['cae', 'ola', 'maquina', 'revuelto', 'giro3d', 'enfoque', 'rebote', 'brillo']
-SONIDO_TRANSICION = {'mosaico': 'golpes', 'falla': 'falla', 'viaje': 'viento', 'hoja': 'papel', 'giro': 'zas', 'circulo': 'burbuja', 'tinta': 'burbuja'}
+TRANSICIONES = ['barrido', 'zoom', 'deslizar', 'giro', 'circulo', 'tinta', 'persianas', 'mosaico', 'falla', 'viaje', 'hoja', 'doble',
+                'diagonal', 'cubo', 'rebanadas', 'remolino', 'rombo', 'telon', 'estrella', 'caida']
+LETRAS = ['cae', 'ola', 'maquina', 'revuelto', 'giro3d', 'enfoque', 'rebote', 'brillo',
+          'desliza', 'columpio', 'neon', 'sube', 'espejo', 'gelatina', 'arcoiris', 'lluvia']
+SONIDO_TRANSICION = {'mosaico': 'golpes', 'falla': 'falla', 'viaje': 'viento', 'hoja': 'papel', 'giro': 'zas', 'circulo': 'burbuja', 'tinta': 'burbuja',
+                     'cubo': 'zas', 'rebanadas': 'golpes', 'remolino': 'viento', 'rombo': 'burbuja', 'telon': 'papel', 'estrella': 'brillo', 'caida': 'pop'}
+# Cómo se señalan los botones en las capturas; se van turnando en cada video.
+EFECTOS = ['anillo', 'trazo', 'esquinas', 'marcador', 'flecha', 'pulso', 'lupa', 'subrayado', 'destellos']
 
 
 def volumen(archivo):
@@ -51,6 +56,8 @@ if __name__ == '__main__':
     transiciones = [e.get('transicion') for e in guion['escenas']]
     letras = [e.get('letras') for e in guion['escenas']]
     escenas, eventos, reloj = [], [], 0.0
+    # Cada video empieza en un efecto distinto (según su título) y los va turnando.
+    efecto_inicial, capturas_vistas = sum(map(ord, guion.get('titulo', ''))) % len(EFECTOS), 0
     for n, e in enumerate(guion['escenas']):
         voz = e['voz_segundos']
         largo = ANTES + voz + DESPUES + EXTRA.get(e['tipo'], 0)
@@ -65,11 +72,13 @@ if __name__ == '__main__':
             eventos.append([SONIDO_TRANSICION.get(escena['transicion'], 'zas'), round(reloj, 3)])
         if escena['letras'] == 'maquina':
             eventos += [['tecla', round(reloj + 0.35 + i * 0.045, 3)] for i in range(min(len(escena['titulo']), 30))]
-        elif escena['letras'] in ('brillo', 'revuelto'):
+        elif escena['letras'] in ('brillo', 'revuelto', 'neon', 'arcoiris'):
             eventos.append(['brillo', round(reloj + 0.4, 3)])
         if e['tipo'] == 'captura':
             p = contenido['paginas'][e['pagina'] - 1]
-            escena.update({'imagen': p['archivo'], 'direccion': p['direccion'], 'marcas': []})
+            escena.update({'imagen': p['archivo'], 'direccion': p['direccion'], 'marcas': [],
+                           'efecto': EFECTOS[(efecto_inicial + capturas_vistas) % len(EFECTOS)]})
+            capturas_vistas += 1
             for k, m in enumerate(e.get('resaltar', [])[:2]):
                 clic = habla + voz * (0.18 if k == 0 else 0.58)
                 escena['marcas'].append({'caja': m['caja'], 'clic': round(clic, 3), 'nota': m.get('nota', '')})

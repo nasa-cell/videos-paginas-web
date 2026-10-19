@@ -31,7 +31,7 @@ html, body { width: 1920px; height: 1080px; overflow: hidden; background: #000; 
 .capa { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
 .capa img { width: 1920px; height: 1080px; display: block; }
 .foco { position: absolute; border-radius: 26px; box-shadow: 0 0 0 4000px rgba(5, 10, 30, .5); opacity: 0; pointer-events: none; }
-.anillo { position: absolute; border: 9px solid var(--acento); border-radius: 22px; opacity: 0;
+.anillo { position: absolute; border: 9px solid var(--acento); border-radius: 22px;
   box-shadow: 0 0 0 6px var(--papel), 0 0 40px 10px rgba(255, 255, 255, .6); }
 .nota { position: absolute; white-space: nowrap; font-family: 'Titulo'; font-size: 40px; color: var(--oscuro); background: var(--acento);
   padding: 6px 24px 10px; border-radius: 18px; border: 5px solid var(--oscuro); opacity: 0; transform-origin: 50% 100%; box-shadow: 6px 6px 0 var(--oscuro); }
@@ -85,3 +85,30 @@ html, body { width: 1920px; height: 1080px; overflow: hidden; background: #000; 
 #franjas div:first-child { background: var(--oscuro); } #franjas div:last-child { background: var(--acento); }
 #avance { position: absolute; left: 0; right: 0; top: 0; height: 12px; background: rgba(0, 0, 0, .25); z-index: 9; }
 #avance div { height: 100%; width: 0; background: var(--acento); }
+
+/* Efectos para señalar botones */
+.efecto { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; }
+.trazo { position: absolute; overflow: visible; transform: rotate(-2deg); }
+.trazo path { fill: none; stroke: var(--acento); stroke-width: 11; stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 1; stroke-dashoffset: 1; filter: drop-shadow(0 0 3px var(--papel)) drop-shadow(4px 4px 0 var(--oscuro)); }
+.esquina { position: absolute; width: 60px; height: 60px; border: 0 solid var(--acento); filter: drop-shadow(3px 3px 0 var(--oscuro)); }
+.esquina.ai { border-top-width: 12px; border-left-width: 12px; border-top-left-radius: 18px; }
+.esquina.ad { border-top-width: 12px; border-right-width: 12px; border-top-right-radius: 18px; }
+.esquina.bi { border-bottom-width: 12px; border-left-width: 12px; border-bottom-left-radius: 18px; }
+.esquina.bd { border-bottom-width: 12px; border-right-width: 12px; border-bottom-right-radius: 18px; }
+.marcador { position: absolute; background: var(--acento); opacity: .42; border-radius: 10px 30px 12px 28px; box-shadow: 0 0 24px var(--acento);
+  transform-origin: 0 50%; transform: scaleX(0); }
+.flecha { position: absolute; width: 100px; height: 140px; transform-origin: 50% 50%; filter: drop-shadow(6px 6px 0 var(--oscuro)); }
+.flecha svg { width: 100%; height: 100%; display: block; }
+.flecha path { fill: var(--acento); stroke: var(--papel); stroke-width: 6; stroke-linejoin: round; }
+.pulso { position: absolute; border: 8px solid var(--acento); border-radius: 26px; box-shadow: 0 0 30px 6px var(--acento); }
+.lupa { position: absolute; border-radius: 50%; border: 14px solid var(--oscuro); box-shadow: 0 0 0 6px var(--acento), inset 0 0 40px rgba(255,255,255,.55);
+  transform: scale(0); }
+.lupa i { position: absolute; right: -78px; bottom: -40px; width: 110px; height: 30px; border-radius: 15px; background: var(--oscuro);
+  box-shadow: 0 0 0 6px var(--acento); transform: rotate(45deg); transform-origin: 0 50%; }
+.subrayado { position: absolute; height: 16px; border-radius: 10px; background: var(--acento); transform-origin: 0 50%; transform: scaleX(0);
+  box-shadow: 4px 4px 0 var(--oscuro); }
+.subrayado.segunda { height: 10px; }
+.destello { position: absolute; width: 46px; height: 46px; background: var(--acento); transform: scale(0);
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); }
+.marco-destellos { position: absolute; border: 5px dashed var(--acento); border-radius: 22px; opacity: 0; }

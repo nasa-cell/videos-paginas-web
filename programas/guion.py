@@ -7,9 +7,12 @@ MODELOS = ['gemini-flash-latest', 'gemini-flash-lite-latest']
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VOCES = json.load(open(os.path.join(RAIZ, 'voces.json'), encoding='utf-8'))
 PALABRAS_POR_MINUTO = 118
-FONDOS = ['aurora', 'galaxia', 'olas', 'neon', 'burbujas', 'comic', 'rayos']
-TRANSICIONES = ['barrido', 'zoom', 'deslizar', 'giro', 'circulo', 'tinta', 'persianas', 'mosaico', 'falla', 'viaje', 'hoja', 'doble']
-LETRAS = ['cae', 'ola', 'maquina', 'revuelto', 'giro3d', 'enfoque', 'rebote', 'brillo']
+FONDOS = ['aurora', 'galaxia', 'olas', 'neon', 'burbujas', 'comic', 'rayos',
+          'lluvia', 'hexagonos', 'atardecer', 'cuaderno', 'fiesta', 'fuegos', 'geometria', 'ondas']
+TRANSICIONES = ['barrido', 'zoom', 'deslizar', 'giro', 'circulo', 'tinta', 'persianas', 'mosaico', 'falla', 'viaje', 'hoja', 'doble',
+                'diagonal', 'cubo', 'rebanadas', 'remolino', 'rombo', 'telon', 'estrella', 'caida']
+LETRAS = ['cae', 'ola', 'maquina', 'revuelto', 'giro3d', 'enfoque', 'rebote', 'brillo',
+          'desliza', 'columpio', 'neon', 'sube', 'espejo', 'gelatina', 'arcoiris', 'lluvia']
 
 INSTRUCCIONES = """Eres el guionista de un video explicativo de {MINUTOS} minuto(s) sobre una página web.
 Te doy capturas de la página (1920x1080; algunas son partes más abajo de la misma página) y, por
@@ -29,6 +32,22 @@ Lo que muestres en pantalla sale de la página. Si el sitio es muy conocido, pue
 públicos seguros sobre él (quién lo creó, cuándo y para qué); si no estás seguro de un dato, no
 lo digas. No inventes nada. Escribe en español latino, cálido y claro. Los números se escriben
 como se dicen ("quince soles", no "S/ 15"). No repitas palabras en una misma frase.
+
+Cómo escribir la narración (muy importante):
+- La portada engancha: el personaje se presenta en pocas palabras y dice lo más interesante del sitio
+  o del tema (una pregunta o un dato que llame la atención). Nada de "Hola a todos" genérico.
+- Cada escena aporta algo NUEVO y concreto sacado de la página: un nombre, una sección, una cifra,
+  un ejemplo, un paso. Prohibido el relleno: "es muy interesante", "sin duda", "como podemos ver",
+  "aquí podemos observar", "en esta sección", "cabe destacar".
+- Frases cortas (máximo 18 palabras) y en voz activa, con verbos concretos (busca, compra, aprende,
+  descubre, elige). Tutea a quien mira.
+- Une las escenas con naturalidad, como alguien que va recorriendo la página ("Y si bajamos un
+  poco…", "Ahora mira arriba a la derecha…"). No empieces dos escenas seguidas con la misma palabra.
+- Cuando se resalta algo, nómbralo tal como se ve escrito en la página para que se entienda qué se señala.
+- Si narran dos personajes, que conversen de verdad: uno pregunta o reacciona y el otro responde
+  o completa; no repitan lo que dijo el otro ni digan "como dijo…" más de una vez en todo el video.
+- El cierre resume en una frase lo más útil y se despide con una invitación a visitar o usar el
+  sitio; no repitas el lema palabra por palabra.
 
 {QUIENES}
 

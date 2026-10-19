@@ -32,6 +32,8 @@
 
   // ---------------- Fondos (dibujados en un lienzo, cuadro a cuadro) ----------------
   const [CLARO, OSCURO, ACENTO] = D.colores;
+  // Color #hex con transparencia (0 a 1).
+  const rgba = (hex, a) => { const n = parseInt(String(hex).replace('#', '').padEnd(6, '0').slice(0, 6), 16); return `rgba(${n >> 16},${n >> 8 & 255},${n & 255},${a})`; };
   const FONDOS = {
     aurora: { oscuro: true, dibujar(c, t, w, h) {
       c.fillStyle = '#071233'; c.fillRect(0, 0, w, h);
@@ -121,12 +123,136 @@
       });
       c.globalAlpha = 1;
     } },
+    lluvia: { oscuro: true, dibujar(c, t, w, h, e) {
+      const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#050b24'); g.addColorStop(1, '#0c1f5c');
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
+      e.gotas = e.gotas || Array.from({ length: 90 }, (_, i) => { const r = azar(i + 51); return [r(), r(), 80 + r() * 260, 120 + r() * 380, r() < .25]; });
+      e.gotas.forEach(([x, y, largo, v, oro]) => {
+        const py = (y * (h + largo) + t * v) % (h + largo) - largo, px = x * w;
+        const l = c.createLinearGradient(px, py, px, py + largo), col = oro ? '245,184,61' : '120,190,255';
+        l.addColorStop(0, `rgba(${col},0)`); l.addColorStop(1, `rgba(${col},.75)`);
+        c.strokeStyle = l; c.lineWidth = oro ? 3 : 2; c.beginPath(); c.moveTo(px, py); c.lineTo(px, py + largo); c.stroke();
+      });
+    } },
+    hexagonos: { oscuro: true, dibujar(c, t, w, h) {
+      c.fillStyle = OSCURO; c.fillRect(0, 0, w, h);
+      const r = 58, dx = r * Math.sqrt(3), dy = r * 1.5;
+      c.lineWidth = 3;
+      for (let f = 0; f * dy < h + r; f++) for (let k = -1; k * dx < w + dx; k++) {
+        const cx = k * dx + (f % 2 ? dx / 2 : 0), cy = f * dy;
+        const onda = (Math.sin(cx * .004 + cy * .006 - t * 1.6) + 1) / 2;
+        c.beginPath();
+        for (let j = 0; j < 6; j++) { const a = Math.PI / 3 * j + Math.PI / 6; c.lineTo(cx + Math.cos(a) * (r - 4), cy + Math.sin(a) * (r - 4)); }
+        c.closePath();
+        c.fillStyle = rgba(CLARO, onda * .35); c.fill();
+        c.strokeStyle = `rgba(255,255,255,${.06 + onda * .16})`; c.stroke();
+      }
+    } },
+    atardecer: { oscuro: false, dibujar(c, t, w, h, e) {
+      const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#ff9a7a'); g.addColorStop(.55, '#ffc48a'); g.addColorStop(1, '#fff0c9');
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
+      const sol = c.createRadialGradient(w * .78, h * .3, 0, w * .78, h * .3, h * .5);
+      sol.addColorStop(0, 'rgba(255,250,220,1)'); sol.addColorStop(.25, 'rgba(255,226,150,.9)'); sol.addColorStop(1, 'rgba(255,200,120,0)');
+      c.fillStyle = sol; c.fillRect(0, 0, w, h);
+      e.nubes = e.nubes || Array.from({ length: 9 }, (_, i) => { const r = azar(i + 77); return [r(), .08 + r() * .55, 160 + r() * 220, 12 + r() * 22]; });
+      c.fillStyle = 'rgba(255,255,255,.55)';
+      e.nubes.forEach(([x, y, tam, v]) => {
+        const px = ((x * (w + tam * 3) + t * v) % (w + tam * 3)) - tam * 1.5, py = y * h;
+        c.beginPath(); c.ellipse(px, py, tam, tam * .32, 0, 0, 7); c.fill();
+        c.beginPath(); c.ellipse(px - tam * .45, py + 8, tam * .55, tam * .25, 0, 0, 7); c.fill();
+        c.beginPath(); c.ellipse(px + tam * .5, py + 6, tam * .6, tam * .26, 0, 0, 7); c.fill();
+      });
+    } },
+    cuaderno: { oscuro: false, dibujar(c, t, w, h, e) {
+      c.fillStyle = '#fdfbf3'; c.fillRect(0, 0, w, h);
+      c.strokeStyle = 'rgba(80,140,230,.28)'; c.lineWidth = 2;
+      for (let y = 70; y < h; y += 54) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+      c.strokeStyle = 'rgba(230,80,90,.45)'; c.lineWidth = 3; c.beginPath(); c.moveTo(150, 0); c.lineTo(150, h); c.stroke();
+      e.dibujos = e.dibujos || Array.from({ length: 14 }, (_, i) => { const r = azar(i + 91); return [r() * w, r() * h, 30 + r() * 40, i % 4, r() * 6, r() < .5]; });
+      c.lineWidth = 5; c.lineCap = 'round'; c.lineJoin = 'round';
+      e.dibujos.forEach(([x, y, tam, forma, fase, oro]) => {
+        c.save(); c.translate(x + Math.sin(t * .5 + fase) * 16, y + Math.cos(t * .4 + fase) * 12); c.rotate(Math.sin(t * .6 + fase) * .3);
+        c.strokeStyle = oro ? rgba(ACENTO, .7) : rgba(OSCURO, .35); c.beginPath();
+        if (forma === 0) for (let j = 0; j <= 10; j++) { const a = j * Math.PI / 5 - Math.PI / 2, rr = j % 2 ? tam * .45 : tam; c.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+        else if (forma === 1) c.arc(0, 0, tam * .7, 0, 7);
+        else if (forma === 2) { c.moveTo(-tam, 0); for (let j = 1; j <= 8; j++) c.lineTo(-tam + j * tam / 4, j % 2 ? -tam * .35 : tam * .35); }
+        else { c.moveTo(0, tam * .7); c.bezierCurveTo(-tam, 0, -tam * .5, -tam * .8, 0, -tam * .3); c.bezierCurveTo(tam * .5, -tam * .8, tam, 0, 0, tam * .7); }
+        c.stroke(); c.restore();
+      });
+      c.lineCap = 'butt'; c.lineJoin = 'miter';
+    } },
+    fiesta: { oscuro: false, dibujar(c, t, w, h, e) {
+      const g = c.createLinearGradient(0, 0, w, h); g.addColorStop(0, '#fff4e6'); g.addColorStop(1, '#ffe3ef');
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
+      const colores = [ACENTO, CLARO, '#ff7eb6', '#4cd1a5', '#ffd23f', '#8b7bff'];
+      e.papeles = e.papeles || Array.from({ length: 70 }, (_, i) => { const r = azar(i + 13); return [r(), r(), 40 + r() * 70, r() * 6, i % colores.length, 10 + r() * 14]; });
+      e.papeles.forEach(([x, y, v, fase, col, tam]) => {
+        const py = (y * (h + 60) + t * v) % (h + 60) - 30, px = x * w + Math.sin(t * 1.2 + fase) * 30;
+        c.save(); c.translate(px, py); c.rotate(t * 1.5 + fase); c.scale(1, Math.cos(t * 3 + fase));
+        c.globalAlpha = .55; c.fillStyle = colores[col]; c.fillRect(-tam / 2, -tam * .3, tam, tam * .6); c.restore();
+      });
+      c.globalAlpha = 1;
+    } },
+    fuegos: { oscuro: true, dibujar(c, t, w, h, e) {
+      const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#040a22'); g.addColorStop(1, '#16123f');
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
+      e.astros = e.astros || Array.from({ length: 120 }, (_, i) => { const r = azar(i + 201); return [r() * w, r() * h * .8, r() * 1.6 + .4]; });
+      c.fillStyle = '#fff';
+      e.astros.forEach(([x, y, r], i) => { c.globalAlpha = .35 + .3 * Math.sin(t * 2 + i); c.beginPath(); c.arc(x, y, r, 0, 7); c.fill(); });
+      const colores = [ACENTO, '#ff6b9d', '#6bd5ff', '#ffe36b', '#9b7bff'];
+      for (let j = 0; j < 5; j++) {
+        const per = 2.8, tt = t + j * .61, id = Math.floor(tt / per), u = tt % per, r = azar(id * 7 + j + 1);
+        const cx = w * (.12 + r() * .76), cy = h * (.12 + r() * .35), col = colores[Math.floor(r() * colores.length)];
+        c.fillStyle = col;
+        if (u < .55) {
+          const k = salida(u / .55); c.globalAlpha = .8;
+          c.beginPath(); c.arc(cx, h + 20 - (h + 20 - cy) * k, 4, 0, 7); c.fill();
+        } else {
+          const v = u - .55, radio = 240 * salida(Math.min(1, v / 1.1));
+          c.globalAlpha = Math.max(0, 1 - v / 2);
+          for (let i = 0; i < 36; i++) {
+            const a = i / 36 * Math.PI * 2;
+            c.beginPath(); c.arc(cx + Math.cos(a) * radio, cy + Math.sin(a) * radio + 50 * v * v, Math.max(1, 4.5 - v * 1.5), 0, 7); c.fill();
+          }
+        }
+      }
+      c.globalAlpha = 1;
+    } },
+    geometria: { oscuro: false, dibujar(c, t, w, h, e) {
+      c.fillStyle = CLARO; c.fillRect(0, 0, w, h);
+      const g = c.createRadialGradient(w * .3, h * .2, 0, w * .3, h * .2, w * .8);
+      g.addColorStop(0, 'rgba(255,255,255,.18)'); g.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = g; c.fillRect(0, 0, w, h);
+      e.figuras = e.figuras || Array.from({ length: 26 }, (_, i) => { const r = azar(i + 61); return [r() * w, r(), 40 + r() * 90, 14 + r() * 30, i % 3, r() * 6, r() < .3]; });
+      c.lineWidth = 6; c.lineJoin = 'round';
+      e.figuras.forEach(([x, y, tam, v, forma, fase, oro]) => {
+        const py = ((y * (h + 200) - t * v) % (h + 200) + h + 200) % (h + 200) - 100;
+        c.save(); c.translate(x + Math.sin(t * .3 + fase) * 30, py); c.rotate(t * .4 + fase);
+        c.strokeStyle = oro ? rgba(ACENTO, .6) : 'rgba(255,255,255,.28)'; c.beginPath();
+        if (forma === 0) { c.moveTo(0, -tam / 2); c.lineTo(tam / 2, tam / 2.5); c.lineTo(-tam / 2, tam / 2.5); c.closePath(); }
+        else if (forma === 1) c.rect(-tam / 2.6, -tam / 2.6, tam / 1.3, tam / 1.3);
+        else c.arc(0, 0, tam / 2.4, 0, 7);
+        c.stroke(); c.restore();
+      });
+      c.lineJoin = 'miter';
+    } },
+    ondas: { oscuro: true, dibujar(c, t, w, h) {
+      c.fillStyle = '#06122e'; c.fillRect(0, 0, w, h);
+      c.fillStyle = 'rgba(120,160,255,.12)';
+      for (let y = 30; y < h; y += 60) for (let x = 30; x < w; x += 60) c.fillRect(x - 1.5, y - 1.5, 3, 3);
+      [[w * .12, h * .2, CLARO], [w * .88, h * .85, ACENTO], [w * .7, h * .1, '#5fd4ff']].forEach(([cx, cy, col], j) => {
+        for (let i = 0; i < 6; i++) {
+          const k = (t * .22 + i / 6 + j * .17) % 1;
+          c.strokeStyle = rgba(col, (1 - k) * .55); c.lineWidth = 4 + (1 - k) * 4;
+          c.beginPath(); c.arc(cx, cy, k * w * .55, 0, 7); c.stroke();
+        }
+      });
+    } },
   };
   const fondo = FONDOS[D.fondo] || FONDOS.rayos;
   // Los fondos que usan el color de la página eligen letras claras u oscuras según lo claro que sea ese color.
   const luz = hex => { const n = parseInt(hex.replace('#', '').padEnd(6, '0').slice(0, 6), 16); return (0.299 * (n >> 16) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255; };
-  const usaColorPagina = ['rayos', 'comic', 'burbujas'].includes(D.fondo);
-  lienzo.classList.toggle('oscuro', usaColorPagina ? luz(D.fondo === 'burbujas' ? OSCURO : CLARO) < 0.55 : fondo.oscuro);
+  const usaColorPagina = ['rayos', 'comic', 'burbujas', 'hexagonos', 'geometria'].includes(D.fondo);
+  lienzo.classList.toggle('oscuro', usaColorPagina ? luz(['burbujas', 'hexagonos'].includes(D.fondo) ? OSCURO : CLARO) < 0.55 : fondo.oscuro);
   const pincel = document.getElementById('fondo').getContext('2d');
   const estadoFondo = {};
 
@@ -144,10 +270,16 @@
   const animarLetras = (letras, tipo, u, cursor) => {
     // u: segundos desde que empieza la animación
     const n = letras.length;
+    if (tipo === 'lluvia' && !letras.orden) {
+      // Orden fijo «al azar» en que caen las letras.
+      const r = azar(n * 13 + 5);
+      letras.orden = letras.map((_, i) => [r(), i]).sort((a, b) => a[0] - b[0]).map(x => x[1]);
+      letras.puesto = []; letras.orden.forEach((i, k) => { letras.puesto[i] = k; });
+    }
     letras.forEach((l, i) => {
-      const d = i * (tipo === 'maquina' ? .045 : .04);
-      const k = tramo(u, d, d + .55);
-      let tr = '', op = k > 0 ? 1 : 0, filtro = '', sombra = '';
+      const d = tipo === 'lluvia' ? letras.puesto[i] * .05 : i * (tipo === 'maquina' ? .045 : .04);
+      const k = tramo(u, d, d + .55), v = u - d;
+      let tr = '', op = k > 0 ? 1 : 0, filtro = '', sombra = '', origen = '', recorte = '', color = '';
       if (tipo === 'cae') tr = `translateY(${(1 - salto(k)) * -140}px) rotate(${(1 - k) * 25}deg) scale(${.4 + .6 * k})`;
       else if (tipo === 'ola') { tr = `translateY(${(1 - salida(k)) * 60 + Math.sin(u * 4 - i * .5) * 6 * k}px)`; op = k; }
       else if (tipo === 'maquina') { op = u >= d ? 1 : 0; }
@@ -165,7 +297,36 @@
         sombra = `0 0 ${10 + pasa * 30}px rgba(255,235,170,${.3 + pasa * .7})`;
         tr = `translateY(${(1 - k) * 16}px)`;
       }
+      else if (tipo === 'desliza') { tr = `translateX(${(1 - salida(k)) * -120}px) skewX(${(1 - salida(k)) * -30}deg)`; op = k; }
+      else if (tipo === 'columpio') {
+        // Cuelga de arriba y se balancea hasta quedar quieta.
+        origen = '50% 0';
+        tr = `rotate(${v > 0 ? Math.sin(v * 9) * 70 * Math.exp(-v * 3.2) : 70}deg)`;
+      }
+      else if (tipo === 'neon') {
+        // Se prende como un letrero de neón: parpadea y queda con un brillo suave.
+        const prendida = k >= 1 || azar(Math.floor(u * 22) * 17 + i * 3)() < k * .9;
+        op = k > 0 ? (prendida ? 1 : .18) : 0;
+        const brillo = k >= 1 ? Math.max(0, 1 - (v - .55) * 1.5) : (prendida ? 1 : 0);
+        if (brillo > 0) sombra = `0 0 ${8 + brillo * 18}px ${rgba(ACENTO, .9 * brillo)}, 0 0 ${24 + brillo * 30}px ${rgba(ACENTO, .6 * brillo)}`;
+      }
+      else if (tipo === 'sube') {
+        // Sale desde la línea de abajo, como si subiera de un piso.
+        recorte = k < 1 ? `inset(${(1 - salida(k)) * 100}% -20% -20% -20%)` : '';
+        tr = `translateY(${(1 - salida(k)) * 50}px)`;
+      }
+      else if (tipo === 'espejo') tr = `perspective(500px) rotateY(${(1 - salida(k)) * 180}deg)`;
+      else if (tipo === 'gelatina') {
+        const temblor = v > 0 ? Math.sin(v * 18) * .35 * Math.exp(-v * 4.5) : 0, base = salida(k);
+        tr = `scale(${base * (1 + temblor)}, ${base * (1 - temblor)})`;
+      }
+      else if (tipo === 'arcoiris') {
+        op = salida(k); tr = `translateY(${(1 - k) * 20}px)`;
+        if (v < 1.6) color = `hsl(${(i * 28 + u * 320) % 360} 90% 62%)`;
+      }
+      else if (tipo === 'lluvia') tr = `translateY(${(1 - salto(k)) * -520}px) rotate(${(1 - k) * (i % 2 ? 30 : -30)}deg)`;
       l.style.opacity = op; l.style.transform = tr; l.style.filter = filtro; l.style.textShadow = sombra;
+      l.style.transformOrigin = origen; l.style.clipPath = recorte; l.style.color = color;
     });
     if (cursor) {
       const escritas = letras.filter(l => l.style.opacity === '1').length;
@@ -187,6 +348,140 @@
     return salida;
   };
 
+  // ---------------- Efectos para señalar botones en las capturas ----------------
+  // Cada efecto arma sus piezas alrededor de la caja [x, y, ancho, alto] y luego las mueve con
+  // p (0 a 1 al aparecer) y u (segundos desde el clic).
+  const SVG = 'http://www.w3.org/2000/svg';
+  const trazoMano = (w, h, semilla) => {
+    // Óvalo hecho «a mano»: da un poco más de una vuelta y tiembla apenas.
+    const r = azar(semilla), cx = w / 2, cy = h / 2, puntos = [];
+    const fase = r() * 6;
+    for (let i = 0; i <= 60; i++) {
+      const a = -2.2 + i / 60 * Math.PI * 2.15;
+      const ex = 1 + Math.sin(a * 3 + fase) * .025, ey = 1 + Math.cos(a * 2 + fase) * .04;
+      puntos.push(`${(cx + Math.cos(a) * (w / 2 - 8) * ex).toFixed(1)},${(cy + Math.sin(a) * (h / 2 - 8) * ey).toFixed(1)}`);
+    }
+    return 'M' + puntos.join(' L');
+  };
+  const EFECTOS = {
+    anillo: {
+      crear(g, [x, y, w, h]) {
+        const e = $(g, 'div', 'anillo');
+        Object.assign(e.style, { left: x - 14 + 'px', top: y - 14 + 'px', width: w + 28 + 'px', height: h + 28 + 'px' });
+        return { e };
+      },
+      dibujar(o, p, u) { o.e.style.transform = `scale(${.6 + .4 * salto(p) + (p >= 1 ? Math.sin(u * 6) * .025 : 0)})`; },
+    },
+    trazo: {
+      crear(g, [x, y, w, h], n) {
+        const ancho = w + 90, alto = h + 70;
+        const svg = document.createElementNS(SVG, 'svg');
+        svg.setAttribute('class', 'trazo'); svg.setAttribute('width', ancho); svg.setAttribute('height', alto);
+        Object.assign(svg.style, { left: x - 45 + 'px', top: y - 35 + 'px' });
+        const linea = document.createElementNS(SVG, 'path');
+        linea.setAttribute('d', trazoMano(ancho, alto, n + 3)); linea.setAttribute('pathLength', '1');
+        svg.appendChild(linea); g.appendChild(svg);
+        return { linea };
+      },
+      dibujar(o, p) { o.linea.style.strokeDashoffset = 1 - salida(p); },
+    },
+    esquinas: {
+      crear(g, [x, y, w, h]) {
+        const piezas = ['ai', 'ad', 'bi', 'bd'].map(lado => {
+          const e = $(g, 'div', 'esquina ' + lado);
+          Object.assign(e.style, { left: (lado[1] === 'i' ? x - 18 : x + w - 42) + 'px', top: (lado[0] === 'a' ? y - 18 : y + h - 42) + 'px' });
+          return { e, sx: lado[1] === 'i' ? -1 : 1, sy: lado[0] === 'a' ? -1 : 1 };
+        });
+        return { piezas };
+      },
+      dibujar(o, p, u) {
+        const lejos = (1 - salto(p)) * 90 + (p >= 1 ? Math.abs(Math.sin(u * 4)) * 8 : 0);
+        o.piezas.forEach(({ e, sx, sy }) => { e.style.transform = `translate(${sx * lejos}px,${sy * lejos}px)`; });
+      },
+    },
+    marcador: {
+      crear(g, [x, y, w, h]) {
+        const e = $(g, 'div', 'marcador');
+        Object.assign(e.style, { left: x - 16 + 'px', top: y - 8 + 'px', width: w + 32 + 'px', height: h + 16 + 'px' });
+        return { e };
+      },
+      dibujar(o, p) { o.e.style.transform = `skewX(-8deg) scaleX(${salida(p)})`; },
+    },
+    flecha: {
+      crear(g, [x, y, w, h]) {
+        // Al costado del botón (la nota va arriba o abajo); a la derecha si no hay espacio a la izquierda.
+        const derecha = x < 190;
+        const e = $(g, 'div', 'flecha', '<svg viewBox="0 0 100 140"><path d="M50 136 L8 82 L34 82 L34 6 L66 6 L66 82 L92 82 Z"/></svg>');
+        Object.assign(e.style, { left: (derecha ? x + w + 40 : x - 140) + 'px', top: y + h / 2 - 70 + 'px' });
+        return { e, derecha };
+      },
+      dibujar(o, p, u) {
+        const lejos = (1 - salto(p)) * 120 + (p >= 1 ? Math.sin(u * 7) * 14 : 0);
+        o.e.style.transform = `translateX(${o.derecha ? lejos : -lejos}px) rotate(${o.derecha ? 90 : -90}deg) scale(${.5 + .5 * salida(p)})`;
+      },
+    },
+    pulso: {
+      crear(g, [x, y, w, h]) {
+        const aros = [0, 1, 2].map(() => {
+          const e = $(g, 'div', 'pulso');
+          Object.assign(e.style, { left: x - 12 + 'px', top: y - 12 + 'px', width: w + 24 + 'px', height: h + 24 + 'px' });
+          return e;
+        });
+        return { aros };
+      },
+      dibujar(o, p, u) {
+        o.aros.forEach((e, j) => {
+          const k = j === 0 ? 0 : ((Math.max(0, u) * .9 + j / 3) % 1);
+          e.style.transform = `scale(${(j === 0 ? .7 + .3 * salto(p) : 1) + k * .35})`;
+          e.style.opacity = j === 0 ? 1 : (u > 0 ? 1 - k : 0);
+        });
+      },
+    },
+    lupa: {
+      crear(g, [x, y, w, h]) {
+        const r = Math.max(w, h) / 2 + 46, cx = x + w / 2, cy = y + h / 2;
+        const e = $(g, 'div', 'lupa', '<i></i>');
+        Object.assign(e.style, { left: cx - r + 'px', top: cy - r + 'px', width: r * 2 + 'px', height: r * 2 + 'px' });
+        return { e };
+      },
+      dibujar(o, p, u) { o.e.style.transform = `scale(${salto(p)}) rotate(${(1 - p) * -40 + (p >= 1 ? Math.sin(u * 3) * 4 : 0)}deg)`; },
+    },
+    subrayado: {
+      crear(g, [x, y, w, h]) {
+        const lineas = [0, 1].map(j => {
+          const e = $(g, 'div', 'subrayado' + (j ? ' segunda' : ''));
+          Object.assign(e.style, { left: x - 10 + j * 30 + 'px', top: y + h + 10 + j * 22 + 'px', width: w + 20 - j * 60 + 'px' });
+          return e;
+        });
+        return { lineas };
+      },
+      dibujar(o, p) {
+        o.lineas.forEach((e, j) => { e.style.transform = `scaleX(${salida(limitar(p * 1.6 - j * .6))}) rotate(${j ? 1.2 : -.8}deg)`; });
+      },
+    },
+    destellos: {
+      crear(g, [x, y, w, h], n) {
+        const r = azar(n + 41);
+        const estrellas = Array.from({ length: 8 }, (_, i) => {
+          const a = i / 8 * Math.PI * 2 + r() * .4, rx = w / 2 + 46, ry = h / 2 + 40;
+          const e = $(g, 'div', 'destello');
+          Object.assign(e.style, { left: x + w / 2 + Math.cos(a) * rx - 23 + 'px', top: y + h / 2 + Math.sin(a) * ry - 23 + 'px' });
+          return { e, a, f: r() * 6 };
+        });
+        const marco = $(g, 'div', 'marco-destellos');
+        Object.assign(marco.style, { left: x - 10 + 'px', top: y - 10 + 'px', width: w + 20 + 'px', height: h + 20 + 'px' });
+        return { estrellas, marco };
+      },
+      dibujar(o, p, u) {
+        o.marco.style.opacity = salida(p);
+        o.estrellas.forEach(({ e, a, f }) => {
+          const salto1 = salto(p), titila = p >= 1 ? .75 + .25 * Math.sin(u * 5 + f) : 1;
+          e.style.transform = `translate(${Math.cos(a) * (1 - salto1) * -60}px,${Math.sin(a) * (1 - salto1) * -60}px) scale(${salto1 * titila}) rotate(${u * 120 + f * 30}deg)`;
+        });
+      },
+    },
+  };
+
   // ---------------- Construir escenas ----------------
   const escenas = D.escenas.map((s, n) => {
     const caja = $(document.getElementById('escenas'), 'div', 'escena');
@@ -206,15 +501,16 @@
         const [x, y, w, h] = m.caja;
         const foco = $(v.capa, 'div', 'foco');
         Object.assign(foco.style, { left: x - 22 + 'px', top: y - 22 + 'px', width: w + 44 + 'px', height: h + 44 + 'px' });
-        const anillo = $(v.capa, 'div', 'anillo');
-        Object.assign(anillo.style, { left: x - 14 + 'px', top: y - 14 + 'px', width: w + 28 + 'px', height: h + 28 + 'px' });
+        const efecto = EFECTOS[s.efecto] || EFECTOS.anillo;
+        const grupo = $(v.capa, 'div', 'efecto');
+        const piezas = efecto.crear(grupo, m.caja, n * 2 + v.capa.childElementCount);
         let nota = null;
         if (m.nota) {
           nota = $(v.capa, 'div', 'nota', escapar(m.nota));
           const arriba = y > 140;
           Object.assign(nota.style, { left: Math.min(1500, Math.max(20, x + w / 2 - 120)) + 'px', top: (arriba ? y - 110 : y + h + 30) + 'px' });
         }
-        return { foco, anillo, nota };
+        return { foco, grupo, efecto, piezas, nota };
       });
       v.reflejo = $(vista, 'div', 'reflejo');
       v.onda = $(vista, 'div', 'onda');
@@ -291,8 +587,8 @@
       const siguiente = s.marcas[i + 1];
       const apaga = siguiente ? tramo(t, siguiente.clic - .9, siguiente.clic - .4) : tramo(t, s.inicio + s.largo - 1.3, s.inicio + s.largo - .6);
       const parte = v.marcas[i];
-      parte.anillo.style.opacity = p > 0 ? 1 - apaga * .6 : 0;
-      parte.anillo.style.transform = `scale(${.6 + .4 * salto(p) + (p >= 1 ? Math.sin((t - m.clic) * 6) * .025 : 0)})`;
+      parte.grupo.style.opacity = p > 0 ? 1 - apaga * .6 : 0;
+      parte.efecto.dibujar(parte.piezas, p, t - m.clic);
       parte.foco.style.opacity = suave(tramo(t, m.clic - .1, m.clic + .4)) * (1 - apaga);
       if (parte.nota) {
         const q = tramo(t, m.clic + .15, m.clic + .6);
@@ -424,6 +720,57 @@
       banda(f1, p1); banda(f2, p2);
       a.style.display = k < .5 ? 'block' : 'none'; b.style.display = k < .5 ? 'none' : 'block';
     },
+    diagonal(a, b, k) {
+      b.style.zIndex = 1;
+      const p = k * 2;
+      b.style.clipPath = `polygon(0 0, ${p * 100}% 0, ${(p - 1) * 100}% 100%, 0 100%)`;
+    },
+    cubo(a, b, k) {
+      // Las dos escenas son caras de un cubo que gira hacia la izquierda.
+      a.style.transformOrigin = '100% 50%'; b.style.transformOrigin = '0% 50%';
+      a.style.transform = `perspective(2600px) translateX(${-k * 100}%) rotateY(${k * 90}deg)`;
+      b.style.transform = `perspective(2600px) translateX(${(1 - k) * 100}%) rotateY(${(1 - k) * -90}deg)`;
+      a.style.filter = `brightness(${1 - k * .45})`; b.style.filter = `brightness(${.55 + k * .45})`;
+    },
+    rebanadas(a, b, k) {
+      b.style.zIndex = 1;
+      const partes = [];
+      for (let i = 0; i < 8; i++) {
+        const p = suave(limitar(k * 1.5 - (i % 2 ? .3 : 0) - i * .02)), y0 = i * 12.5, y1 = y0 + 12.5;
+        partes.push(`0% ${y0}%`, `${p * 100}% ${y0}%`, `${p * 100}% ${y1}%`, `0% ${y1}%`);
+      }
+      b.style.clipPath = `polygon(${partes.join(',')})`;
+    },
+    remolino(a, b, k) {
+      a.style.transform = `rotate(${k * 160}deg) scale(${1 - k * .9})`; a.style.opacity = 1 - k;
+      b.style.transform = `rotate(${(1 - k) * -160}deg) scale(${.1 + k * .9})`; b.style.opacity = k; b.style.zIndex = 1;
+    },
+    rombo(a, b, k) {
+      b.style.zIndex = 1;
+      const r = k * 105;
+      b.style.clipPath = `polygon(50% ${50 - r}%, ${50 + r}% 50%, 50% ${50 + r}%, ${50 - r}% 50%)`;
+    },
+    telon(a, b, k) {
+      // Un telón se cierra desde los dos lados y se vuelve a abrir con la escena nueva.
+      franjas.style.display = 'block';
+      const [f1, f2] = franjas.children, c = k < .5 ? suave(k * 2) : 1 - suave((k - .5) * 2);
+      f1.style.clipPath = `inset(0 ${100 - c * 50}% 0 0)`; f2.style.clipPath = `inset(0 0 0 ${100 - c * 50}%)`;
+      a.style.display = k < .5 ? 'block' : 'none'; b.style.display = k < .5 ? 'none' : 'block';
+    },
+    estrella(a, b, k) {
+      b.style.zIndex = 1;
+      const r = k * 140, giro = k * 1.2, puntos = [];
+      for (let i = 0; i < 10; i++) {
+        const ang = i / 10 * Math.PI * 2 - Math.PI / 2 + giro, rr = i % 2 ? r * .48 : r;
+        puntos.push(`${50 + Math.cos(ang) * rr * .5625}% ${50 + Math.sin(ang) * rr}%`);
+      }
+      b.style.clipPath = `polygon(${puntos.join(',')})`;
+    },
+    caida(a, b, k) {
+      b.style.zIndex = 1;
+      b.style.transform = `translateY(${(1 - salto(k)) * -1080}px)`;
+      a.style.transform = `scale(${1 - k * .12})`; a.style.filter = `brightness(${1 - k * .4})`;
+    },
   };
 
   // ---------------- Cuadro completo ----------------
@@ -443,6 +790,7 @@
     const v = escenas[n], local = t - v.s.inicio;
     escenas.forEach(x => { x.caja.style.display = 'none'; limpiarEstilo(x.caja); });
     cortina.style.display = mosaico.style.display = franjas.style.display = 'none';
+    [...franjas.children].forEach(f => { f.style.clipPath = ''; });
     v.caja.style.display = 'block';
     dibujarEscena(v, t);
     if (n > 0 && local < TRANSICION) {
