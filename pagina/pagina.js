@@ -385,9 +385,6 @@
       const r = await api('/api/yo');
       usuario = r.usuario; proveedores = r.proveedores;
     } catch { usuario = null; }
-    $('#conGoogle').hidden = !proveedores.google;
-    $('#conGithub').hidden = !proveedores.github;
-    $('#separador').hidden = !(proveedores.google || proveedores.github);
     ponerModo(modo);
     mostrar();
   }
@@ -399,6 +396,8 @@
     const crear = $('#estudio'), almacen = $('#vistaAlmacen');
     crear.hidden = !usuario || vista !== 'crear';
     almacen.hidden = !usuario || vista !== 'almacen';
+    $('#barraCrear').hidden = crear.hidden;
+    if (crear.hidden) cerrarHojaVoces();
     document.querySelectorAll('#pestanasSitio a').forEach(a => a.dataset.vista === vista ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
     const visible = vista === 'crear' ? crear : almacen;
     if (animar && usuario) { visible.classList.remove('vista-entra'); void visible.offsetWidth; visible.classList.add('vista-entra'); }
@@ -459,6 +458,8 @@
       el.querySelector('.elegir').setAttribute('aria-pressed', si);
       if (tocada === el.dataset.clave && si) { el.classList.remove('salta'); void el.offsetWidth; el.classList.add('salta'); chispas(el); }
     });
+    $('#chipsVoces').innerHTML = elegidas.map(c => voces.find(v => v.clave === c)).filter(Boolean)
+      .map(v => `<span class="chip"><i style="background:${escapar(v.color)}">${escapar(v.nombre[0])}</i>${escapar(v.nombre)}</span>`).join('');
     resumen(!!tocada);
   }
   const botonesMin = [...document.querySelectorAll('#duracion button')], dorada = $('#duracion .marca-dorada');
@@ -479,6 +480,28 @@
     r.textContent = nombres.length ? `Video de ${minutos} min contado por ${nombres.join(' y ')}.` : '';
     if (animar) { r.classList.remove('cambia'); void r.offsetWidth; r.classList.add('cambia'); }
   }
+
+  // ---------- Celular: las voces suben en una hoja desde abajo ----------
+  const celular = matchMedia('(max-width: 900px)'), hojaVoces = $('.tarjeta-voces'), veloVoces = $('#veloVoces');
+  function colocarVoces() {
+    if (celular.matches) { hojaVoces.classList.remove('sube'); hojaVoces.setAttribute('role', 'dialog'); document.body.appendChild(hojaVoces); }
+    else { cerrarHojaVoces(); hojaVoces.removeAttribute('role'); $('.columna-derecha').prepend(hojaVoces); }
+  }
+  function abrirHojaVoces() { veloVoces.hidden = false; document.body.classList.add('hoja-abierta'); $('#listoVoces').focus({ preventScroll: true }); }
+  function cerrarHojaVoces() {
+    if (!document.body.classList.contains('hoja-abierta')) return;
+    document.body.classList.remove('hoja-abierta'); veloVoces.hidden = true; muestra.pause();
+  }
+  celular.addEventListener('change', colocarVoces); colocarVoces();
+  $('#filaVoces').addEventListener('click', abrirHojaVoces);
+  $('#listoVoces').addEventListener('click', () => { cerrarHojaVoces(); $('#filaVoces').focus({ preventScroll: true }); });
+  veloVoces.addEventListener('click', cerrarHojaVoces);
+  addEventListener('keydown', e => { if (e.key === 'Escape') cerrarHojaVoces(); });
+  $('#ayudaSubir').addEventListener('click', e => { const abierta = zona.classList.toggle('con-ayuda'); e.currentTarget.setAttribute('aria-expanded', abierta); });
+  $('#queHace').addEventListener('click', e => {
+    const abierta = $('#portada > div').classList.toggle('con-info');
+    e.currentTarget.setAttribute('aria-expanded', abierta); e.currentTarget.textContent = abierta ? '¿Qué hace? ▴' : '¿Qué hace? ▾';
+  });
 
   // ---------- Capturas propias (opcional) ----------
   let LIMITES = { 1: 4, 2: 6, 3: 8, 5: 12 }, MEGAS = 8;
@@ -553,7 +576,7 @@
   $('#formVideo').addEventListener('submit', async e => {
     e.preventDefault();
     abrirAudio();
-    const boton = e.target.querySelector('.crear'), error = $('#errorVideo');
+    const boton = [...document.querySelectorAll('.crear')].find(b => b.offsetParent) || e.target.querySelector('.crear'), error = $('#errorVideo');
     const enlace = $('#enlace').value.trim();
     error.textContent = '';
     if (!enlace) { error.textContent = 'Pega el enlace de una página web.'; $('#enlace').focus(); return; }
@@ -748,6 +771,13 @@
   $('#cerrarVisor').addEventListener('click', cerrarVisor);
   visor.addEventListener('click', e => { if (e.target === visor) cerrarVisor(); });
   visor.addEventListener('close', () => reproductor.pause());
+
+  // Google y GitHub siempre se ven; si falta activarlos, se avisa en vez de ir a una página de error
+  [['#conGoogle', 'google', 'Google'], ['#conGithub', 'github', 'GitHub']].forEach(([sel, clave, nombre]) => $(sel).addEventListener('click', e => {
+    if (proveedores[clave]) return;
+    e.preventDefault();
+    avisar(`Entrar con ${nombre} todavía no está activado. Por ahora entra con tu correo.`, true);
+  }));
 
   // Al volver de Google o GitHub con un aviso
   const aviso = new URLSearchParams(location.search).get('aviso');

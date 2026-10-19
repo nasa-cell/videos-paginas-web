@@ -64,27 +64,74 @@ const fallar = (causa, detalle) => {
   process.exit(2);
 };
 
-// Botones de cookies y avisos que tapan la página
-const CERRAR = /^(aceptar( todo| todas| cookies)?|acepto|accept( all| cookies)?|agree|i agree|de acuerdo|entendido|ok|got it|allow all|permitir( todo| todas)?|continuar|consent|rechazar( todo)?|reject all|cerrar|close|×|✕|no, gracias|no gracias|ahora no|not now)$/i;
+// Botones de cookies y avisos que tapan la página.
+// Los de cookies se tocan donde estén; los genéricos («Cerrar», «OK», «No, gracias», la ×)
+// solo dentro de ventanas flotantes, para no apretar botones normales de la página.
+const COOKIES = /^(aceptar( todo| todas| todas las cookies| cookies)?|acepto|accept( all| all cookies| cookies)?|agree|i agree|allow all|permitir( todo| todas)?|consent|rechazar( todo| todas)?|reject all)$/i;
+const GENERICO = /^(de acuerdo|entendido|ok|okay|got it|continuar|cerrar|close|no, gracias|no gracias|no, thanks|no thanks|ahora no|not now|quizás más tarde|más tarde|maybe later|×|✕|✖|x)$/i;
 
 async function limpiar(pagina) {
-  await pagina.evaluate(CERRAR_TEXTO => {
-    const patron = new RegExp(CERRAR_TEXTO, 'i');
-    const visibles = [...document.querySelectorAll('button, a, [role=button], input[type=button], input[type=submit]')]
-      .filter(b => { const r = b.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
-    for (const b of visibles) {
-      const t = (b.innerText || b.value || b.getAttribute('aria-label') || '').trim().replace(/\s+/g, ' ');
-      if (t.length < 30 && patron.test(t)) { try { b.click(); } catch {} }
-    }
-  }, CERRAR.source).catch(() => {});
-  await pagina.waitForTimeout(600);
-  // Lo que siga tapando más de la mitad de la pantalla se oculta (ventanas emergentes, muros de cookies).
+  for (let vuelta = 0; vuelta < 3; vuelta++) {
+    const tocados = await pagina.evaluate(([COOKIES_TEXTO, GENERICO_TEXTO]) => {
+      const cookies = new RegExp(COOKIES_TEXTO, 'i'), generico = new RegExp(GENERICO_TEXTO, 'i');
+      const NOMBRE_CERRAR = /(close|cerrar|dismiss|descartar)/i;
+      const flotante = e => {
+        for (let x = e; x && x !== document.body; x = x.parentElement) {
+          if (getComputedStyle(x).position === 'fixed' || x.matches('dialog,[role=dialog],[role=alertdialog],[aria-modal=true]')) return true;
+        }
+        return false;
+      };
+      // Que se vea y que no haya otra cosa encima: así no se tocan botones escondidos (carritos fuera de la pantalla).
+      const alAlcance = b => {
+        const r = b.getBoundingClientRect();
+        if (r.width < 4 || r.height < 4 || r.bottom < 0 || r.right < 0 || r.top > innerHeight || r.left > innerWidth) return false;
+        const h = document.elementFromPoint(Math.min(innerWidth - 1, Math.max(0, r.left + r.width / 2)), Math.min(innerHeight - 1, Math.max(0, r.top + r.height / 2)));
+        return !!h && (b === h || b.contains(h) || h.contains(b));
+      };
+      // Un enlace que lleva a otra página no se toca.
+      const navega = b => b.tagName === 'A' && b.getAttribute('href') && !/^(#|javascript:)/i.test(b.getAttribute('href'));
+      let tocados = 0;
+      for (const b of document.querySelectorAll('button, a, [role=button], input[type=button], input[type=submit], span, div, svg, i')) {
+        if (tocados >= 4) break;
+        const esBoton = b.matches('button, a, [role=button], input');
+        const texto = (b.innerText || b.value || b.textContent || '').trim().replace(/\s+/g, ' ').replace(/[.!¡]+$/, '');
+        if (texto.length > 40) continue;
+        const etiqueta = `${b.getAttribute('aria-label') || ''} ${b.getAttribute('title') || ''}`;
+        const clase = String(b.className && (b.className.baseVal ?? b.className));
+        const porCookies = esBoton && cookies.test(texto);
+        const porCerrar = (esBoton && generico.test(texto)) || NOMBRE_CERRAR.test(etiqueta) || (texto.length <= 1 && b.children.length <= 2 && NOMBRE_CERRAR.test(clase));
+        if (!porCookies && !porCerrar) continue;
+        if (porCerrar && !porCookies && !flotante(b)) continue;
+        if (navega(b) || !alAlcance(b)) continue;
+        try { b.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window })); tocados++; } catch {}
+      }
+      return tocados;
+    }, [COOKIES.source, GENERICO.source]).catch(() => 0);
+    if (!tocados) break;
+    await pagina.waitForTimeout(700);
+  }
+  // Lo que siga tapando la pantalla se oculta: ventanas emergentes, velos grises y avisos de cookies.
   await pagina.evaluate(() => {
+    const area = innerWidth * innerHeight;
     for (const e of document.querySelectorAll('body *')) {
       const s = getComputedStyle(e);
-      if (s.position !== 'fixed' && s.position !== 'sticky') continue;
+      const dialogo = e.matches('dialog[open],[role=dialog],[role=alertdialog],[aria-modal=true]');
+      if (s.position !== 'fixed' && !dialogo) continue;
+      if (s.display === 'none' || s.visibility === 'hidden' || +s.opacity < 0.05) continue;
       const r = e.getBoundingClientRect();
-      if (r.width * r.height > innerWidth * innerHeight * 0.45 && +s.zIndex > 10) e.style.setProperty('display', 'none', 'important');
+      const ancho = Math.max(0, Math.min(r.right, innerWidth) - Math.max(r.left, 0));
+      const alto = Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0));
+      if (!ancho || !alto) continue;
+      const texto = (e.innerText || '').slice(0, 1500);
+      const deCookies = s.position === 'fixed' && /cookie|galleta/i.test(texto) && texto.length < 1500 && alto < innerHeight * 0.6;
+      if (!deCookies) {
+        if (ancho * alto < area * 0.12) continue;                                  // chat y botones flotantes se quedan
+        if (r.top <= 2 && alto <= 170 && ancho > innerWidth * 0.8) continue;       // cabecera fija de la página
+        // Solo si de verdad está encima del contenido (no un fondo fijo detrás).
+        const encima = document.elementFromPoint(Math.max(0, r.left) + ancho / 2, Math.max(0, r.top) + alto / 2);
+        if (!encima || !(e === encima || e.contains(encima))) continue;
+      }
+      e.style.setProperty('display', 'none', 'important');
     }
     // Si un aviso bloqueó el desplazamiento, se libera; si no, no se toca nada.
     for (const e of [document.documentElement, document.body]) if (getComputedStyle(e).overflowY === 'hidden') e.style.overflowY = 'visible';
@@ -134,7 +181,9 @@ async function abrir(pagina, direccion) {
     for (let y = 0; y < alto; y += innerHeight / 2) { scrollTo(0, y); await new Promise(r => setTimeout(r, 180)); }
     scrollTo(0, 0);
   }).catch(() => {});
-  await pagina.waitForTimeout(700);
+  await pagina.waitForTimeout(1500);
+  // Muchas ventanas («suscríbete», ofertas) salen recién al bajar: se limpia otra vez.
+  await limpiar(pagina);
   return {};
 }
 
@@ -296,6 +345,8 @@ async function medir(pagina) {
       // Se esperan las letras de la página: si cambian después de medir, las cajas quedan corridas.
       await pagina.evaluate(() => Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 4000))])).catch(() => {});
       await pagina.waitForTimeout(150);
+      // Justo antes de la foto, por si salió una ventana con el tiempo o al bajar.
+      await limpiar(pagina);
       const numero = resultado.paginas.length + 1;
       const archivo = `pagina-${numero}.jpg`;
       // Primero la foto y enseguida la medida, para que las cajas coincidan con lo que se ve.
