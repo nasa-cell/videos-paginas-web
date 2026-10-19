@@ -4,9 +4,11 @@ Google y GitHub solo aparecen si sus claves están puestas en el servidor
 (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET y GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET).
 """
 import json
+import logging
 import os
 import re
 import secrets
+import smtplib
 import time
 import urllib.parse
 import urllib.request
@@ -18,6 +20,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from . import base
 
 cuentas = Blueprint('cuentas', __name__)
+logger = logging.getLogger(__name__)
 CORREO = re.compile(r'^[^@\s]{1,64}@[^@\s]{1,190}\.[^@\s]{2,24}$')
 NOMBRE = re.compile(r"^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ' -]{2,40}$")
 
@@ -103,8 +106,10 @@ def registro():
     codigo = f'{secrets.randbelow(1000000):06d}'
     try:
         envio.enviar_codigo(correo, nombre, codigo, 'registro')
-    except Exception:
-        return jsonify(error='No pudimos mandar el correo a esa dirección. Revisa que esté bien escrita.'), 502
+    except (smtplib.SMTPException, OSError, KeyError, ValueError) as error:
+        codigo_smtp = getattr(error, 'smtp_code', None)
+        logger.warning('Falló el envío del correo de registro (%s, SMTP %s)', type(error).__name__, codigo_smtp)
+        return jsonify(error='No pudimos enviar el correo de verificación por un problema del servicio. Inténtalo más tarde.'), 502
     base.ejecutar('DELETE FROM pendientes WHERE correo = ?', (correo,))
     base.ejecutar('INSERT INTO pendientes (correo, nombre, clave_hash, codigo_hash, vence, intentos, enviado) VALUES (?, ?, ?, ?, ?, 0, ?)',
                   (correo, nombre, generate_password_hash(clave), generate_password_hash(codigo), time.time() + 900, time.time()))
