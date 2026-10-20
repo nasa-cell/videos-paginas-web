@@ -200,11 +200,67 @@ async function fotografiar(pagina, archivo) {
   }
 }
 
+// Barras que quedan pegadas arriba al bajar (menú, cabecera): su alto y cómo esconderlas en la foto.
+async function altoMenuPegado(pagina) {
+  return pagina.evaluate(() => {
+    let alto = 0;
+    for (const e of document.querySelectorAll('body *')) {
+      const s = getComputedStyle(e);
+      if (s.position !== 'fixed' && s.position !== 'sticky') continue;
+      const r = e.getBoundingClientRect();
+      if (r.top <= 4 && r.height > 20 && r.height < innerHeight * 0.3 && r.width > innerWidth * 0.5 && s.visibility !== 'hidden' && s.display !== 'none') alto = Math.max(alto, r.bottom);
+    }
+    return Math.round(alto);
+  }).catch(() => 0);
+}
+async function esconderMenuPegado(pagina, esconder) {
+  await pagina.evaluate(esconder => {
+    if (!esconder) { document.querySelectorAll('[data-menu-escondido]').forEach(e => { e.style.removeProperty('visibility'); e.removeAttribute('data-menu-escondido'); }); return; }
+    for (const e of document.querySelectorAll('body *')) {
+      const s = getComputedStyle(e);
+      if (s.position !== 'fixed' && s.position !== 'sticky') continue;
+      const r = e.getBoundingClientRect();
+      if (r.top <= 4 && r.height > 20 && r.height < innerHeight * 0.3 && r.width > innerWidth * 0.5) { e.style.setProperty('visibility', 'hidden', 'important'); e.setAttribute('data-menu-escondido', ''); }
+    }
+  }, esconder).catch(() => {});
+}
+
 async function medir(pagina) {
   return pagina.evaluate(() => {
+    // Lo que tiene otra cosa encima (un menú pegado arriba, una barra) no se ve en la foto: no se señala.
+    // Se miran 4 puntos dentro del elemento y se atraviesan las capas transparentes que algunas páginas
+    // ponen encima; un elemento fuera de la parte visible de un carrusel tampoco aparece en esos puntos.
+    const transparente = x => {
+      if (/^(IMG|VIDEO|CANVAS|SVG|PICTURE|IFRAME|INPUT|BUTTON|SELECT|TEXTAREA)$/.test(x.tagName)) return false;
+      const s = getComputedStyle(x);
+      const fondo = s.backgroundColor.match(/[\d.]+/g);
+      if (s.backgroundImage !== 'none' || (fondo && (fondo.length < 4 || +fondo[3] > 0.05))) return false;
+      return ![...x.childNodes].some(n => n.nodeType === 3 && n.textContent.trim());
+    };
+    const destapado = (e, r) => {
+      const antes = e.style.getPropertyValue('pointer-events'), prioridad = e.style.getPropertyPriority('pointer-events');
+      e.style.setProperty('pointer-events', 'auto', 'important');
+      const puntos = [[r.left + r.width / 2, r.top + r.height / 2], [r.left + r.width * .2, r.top + r.height / 2],
+        [r.left + r.width * .8, r.top + r.height / 2], [r.left + r.width / 2, r.top + r.height * .25]];
+      let bien = 0;
+      for (const [x, y] of puntos) {
+        if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) { bien++; continue; }
+        for (const h of document.elementsFromPoint(x, y)) {
+          if (h === e || e.contains(h)) { bien++; break; }
+          if (!transparente(h)) break;
+        }
+      }
+      if (antes) e.style.setProperty('pointer-events', antes, prioridad); else e.style.removeProperty('pointer-events');
+      return bien >= 3;
+    };
+    // En el video el subtítulo va encima de la franja de abajo de la captura: ahí no se señala nada
+    // (esa parte sale más arriba en la captura siguiente).
+    const PISO = innerHeight - 110;
     const visible = e => {
       const r = e.getBoundingClientRect(), s = getComputedStyle(e);
-      return r.width > 8 && r.height > 8 && r.top < innerHeight && r.bottom > 0 && s.visibility !== 'hidden' && +s.opacity > 0.05;
+      // Entero en la foto: una imagen o un título a medias no se señala (marcaría solo la mitad).
+      return r.width > 8 && r.height > 8 && r.top >= 0 && r.left >= -1 && r.right <= innerWidth + 1 && r.bottom <= PISO
+        && s.visibility !== 'hidden' && +s.opacity > 0.05 && destapado(e, r);
     };
     const elementos = [];
     document.querySelectorAll('h1,h2,h3,button,a,img,video,input,textarea,select,[role=button]').forEach(e => {
@@ -212,6 +268,9 @@ async function medir(pagina) {
       const r = e.getBoundingClientRect();
       const texto = (e.innerText || e.alt || e.title || e.getAttribute('aria-label') || e.placeholder || '').trim().replace(/\s+/g, ' ');
       if (!texto && e.tagName !== 'IMG' && e.tagName !== 'VIDEO') return;
+      // Una imagen que no cargó, o un enlace sin nada a la vista (carruseles), sería un recuadro vacío.
+      if (e.tagName === 'IMG' && !(e.complete && e.naturalWidth > 0)) return;
+      if (/^(A|BUTTON)$/.test(e.tagName) && !(e.innerText || '').trim() && !e.querySelector('img, svg, video, picture')) return;
       elementos.push({ tipo: e.tagName.toLowerCase(), texto: texto.slice(0, 80),
         caja: [Math.max(0, r.left), Math.max(0, r.top), Math.min(r.width, innerWidth), Math.min(r.height, innerHeight)].map(Math.round) });
     });
@@ -236,9 +295,9 @@ async function medir(pagina) {
         const rango = document.createRange();
         rango.setStart(n, inicio); rango.setEnd(n, fin);
         const r = rango.getBoundingClientRect();
-        if (r.width < 8 || r.height < 8 || r.top < 0 || r.bottom > innerHeight || r.left < 0 || r.right > innerWidth) continue;
+        if (r.width < 8 || r.height < 8 || r.top < 0 || r.bottom > PISO || r.left < 0 || r.right > innerWidth) continue;
         const s = getComputedStyle(n.parentElement);
-        if (s.visibility === 'hidden' || +s.opacity < .05) continue;
+        if (s.visibility === 'hidden' || +s.opacity < .05 || !destapado(n.parentElement, r)) continue;
         const clave = Math.round(r.left) + ':' + Math.round(r.top);
         if (vistos.has(clave)) continue;
         vistos.add(clave);
@@ -252,7 +311,7 @@ async function medir(pagina) {
       const propio = [...e.childNodes].filter(x => x.nodeType === 3).map(x => x.textContent).join('').trim();
       if (propio.length < 60 || e.closest('nav,footer,script,style')) return false;
       const r = e.getBoundingClientRect();
-      return r.top >= 0 && r.bottom <= innerHeight && r.width > 40;
+      return r.top >= 0 && r.bottom <= PISO && r.width > 40 && destapado(e, r);
     }).slice(0, 12).map(e => {
       const r = e.getBoundingClientRect();
       return { tipo: 'parrafo', texto: e.innerText.replace(/\s+/g, ' ').trim().slice(0, 100), caja: [r.left, r.top, r.width, r.height].map(Math.round) };
@@ -329,15 +388,35 @@ async function medir(pagina) {
     if (process.env.DEPURAR) console.error('forma', pagina.url(), JSON.stringify(forma), esArticulo);
     // Un artículo se recorre entero de arriba a abajo y no se sale a otras páginas (el tema está ahí).
     // En las demás, la primera página guarda hasta 3 partes y las siguientes 1 o 2.
+    // Al bajar, el menú pegado arriba tapa la parte de arriba: cada paso baja menos para no perder datos.
+    const menu = await altoMenuPegado(pagina);
+    const paso = Math.max(600, 1080 - menu - 140);
     let posiciones;
     if (esArticulo) {
-      const cuantas = Math.min(MAXIMO_CAPTURAS, Math.max(3, Math.floor(forma.alto / 1000)));
+      const cuantas = Math.min(MAXIMO_CAPTURAS, Math.max(3, Math.floor(forma.alto / paso)));
       const ultima = Math.max(0, Math.min(forma.alto, 1080 * 40) - 1080);
       posiciones = Array.from({ length: cuantas }, (_, i) => Math.round(i / Math.max(1, cuantas - 1) * ultima));
     } else {
       const partes = Math.min(resultado.paginas.length === 0 ? 3 : 2, Math.max(1, Math.round(forma.alto / 1080)));
-      posiciones = Array.from({ length: partes }, (_, i) => i * 1000);
+      posiciones = Array.from({ length: partes }, (_, i) => i * paso);
     }
+    // Cada captura empieza justo arriba de una imagen grande o de un título cercano: así las portadas salen enteras.
+    posiciones = await pagina.evaluate(lista => {
+      const arriba = [...document.querySelectorAll('img, picture, video, figure, h2, h3')].map(e => {
+        const r = e.getBoundingClientRect();
+        const grande = /IMG|PICTURE|VIDEO|FIGURE/.test(e.tagName) ? r.width > 220 && r.height > 140 && r.height < innerHeight - 160 : r.width > 120;
+        return grande ? Math.round(r.top + scrollY) : null;
+      }).filter(y => y !== null).sort((a, b) => a - b);
+      const usadas = [];
+      return lista.map((y, i) => {
+        if (i === 0 && y === 0) { usadas.push(0); return 0; }
+        const cerca = arriba.filter(t => Math.abs(t - 24 - y) < 340 && !usadas.some(u => Math.abs(u - (t - 24)) < 400));
+        const elegido = cerca.length ? cerca.reduce((a, b) => Math.abs(a - 24 - y) <= Math.abs(b - 24 - y) ? a : b) - 24 : y;
+        const final = Math.max(0, elegido);
+        usadas.push(final);
+        return final;
+      });
+    }, posiciones).catch(() => posiciones);
     for (let parte = 0; parte < posiciones.length && resultado.paginas.length < MAXIMO_CAPTURAS; parte++) {
       // Sin desplazamiento suave: la página queda quieta en su lugar antes de la foto.
       await pagina.evaluate(y => scrollTo({ top: y, behavior: 'instant' }), posiciones[parte]).catch(() => {});
@@ -347,6 +426,8 @@ async function medir(pagina) {
       await pagina.waitForTimeout(150);
       // Justo antes de la foto, por si salió una ventana con el tiempo o al bajar.
       await limpiar(pagina);
+      // Más abajo del comienzo, el menú pegado arriba taparía datos: se esconde para esta foto.
+      await esconderMenuPegado(pagina, posiciones[parte] > 0);
       const numero = resultado.paginas.length + 1;
       const archivo = `pagina-${numero}.jpg`;
       // Primero la foto y enseguida la medida, para que las cajas coincidan con lo que se ve.
