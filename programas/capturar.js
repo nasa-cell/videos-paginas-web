@@ -67,7 +67,7 @@ const fallar = (causa, detalle) => {
 // Botones de cookies y avisos que tapan la página.
 // Los de cookies se tocan donde estén; los genéricos («Cerrar», «OK», «No, gracias», la ×)
 // solo dentro de ventanas flotantes, para no apretar botones normales de la página.
-const COOKIES = /^(aceptar( todo| todas| todas las cookies| cookies)?|acepto|accept( all| all cookies| cookies)?|agree|i agree|allow all|permitir( todo| todas)?|consent|rechazar( todo| todas)?|reject all)$/i;
+const COOKIES = /^(aceptar( todo| todas| todas las cookies| cookies)?|acepto|accept( all| all cookies| cookies)?|agree|i agree|allow all|permitir( todo| todas)?|consent|rechazar( todo| todas)?|reject all|descartar|dismiss)$/i;
 const GENERICO = /^(de acuerdo|entendido|ok|okay|got it|continuar|cerrar|close|no, gracias|no gracias|no, thanks|no thanks|ahora no|not now|quizás más tarde|más tarde|maybe later|×|✕|✖|x)$/i;
 
 async function limpiar(pagina) {
@@ -93,7 +93,9 @@ async function limpiar(pagina) {
       let tocados = 0;
       for (const b of document.querySelectorAll('button, a, [role=button], input[type=button], input[type=submit], span, div, svg, i')) {
         if (tocados >= 4) break;
-        const esBoton = b.matches('button, a, [role=button], input');
+        // Algunas páginas (Amazon) dibujan el texto aparte y ponen un botón invisible encima: se toca ese botón.
+        const dentro = !b.matches('button, a, [role=button], input') && b.children.length <= 3 ? b.querySelector('input[type=submit], input[type=button], button') : null;
+        const esBoton = b.matches('button, a, [role=button], input') || !!dentro;
         const texto = (b.innerText || b.value || b.textContent || '').trim().replace(/\s+/g, ' ').replace(/[.!¡]+$/, '');
         if (texto.length > 40) continue;
         const etiqueta = `${b.getAttribute('aria-label') || ''} ${b.getAttribute('title') || ''}`;
@@ -102,8 +104,9 @@ async function limpiar(pagina) {
         const porCerrar = (esBoton && generico.test(texto)) || NOMBRE_CERRAR.test(etiqueta) || (texto.length <= 1 && b.children.length <= 2 && NOMBRE_CERRAR.test(clase));
         if (!porCookies && !porCerrar) continue;
         if (porCerrar && !porCookies && !flotante(b)) continue;
-        if (navega(b) || !alAlcance(b)) continue;
-        try { b.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window })); tocados++; } catch {}
+        const objetivo = dentro || b;
+        if (navega(objetivo) || !(alAlcance(b) || alAlcance(objetivo))) continue;
+        try { objetivo.click ? objetivo.click() : objetivo.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window })); tocados++; } catch {}
       }
       return tocados;
     }, [COOKIES.source, GENERICO.source]).catch(() => 0);
@@ -225,6 +228,43 @@ async function esconderMenuPegado(pagina, esconder) {
   }, esconder).catch(() => {});
 }
 
+// Carruseles: se corren de lado (o hacia abajo) para mostrar y señalar las tarjetas que estaban escondidas.
+// Si el carrusel no se desliza, se toca su botón «siguiente». Devuelve true si algo cambió en pantalla.
+async function correrCarrusel(pagina, usados) {
+  return pagina.evaluate(async usados => {
+    const PISO = innerHeight - 110;
+    const entero = r => r.top >= 0 && r.bottom <= PISO && r.left >= -1 && r.right <= innerWidth + 1;
+    const espera = ms => new Promise(r => setTimeout(r, ms));
+    const candidatos = [...document.querySelectorAll('body *')].filter(e => {
+      if (e.dataset.carruselVisto || usados.includes(e.dataset.carruselId)) return false;
+      const s = getComputedStyle(e), r = e.getBoundingClientRect();
+      if (r.width < 300 || r.height < 120 || !entero(r)) return false;
+      const deLado = s.overflowX !== 'visible' && e.scrollWidth > e.clientWidth + 60 && e.scrollLeft + e.clientWidth < e.scrollWidth - 20;
+      const haciaAbajo = /auto|scroll/.test(s.overflowY) && e.scrollHeight > e.clientHeight + 60 && e !== document.scrollingElement;
+      return deLado || haciaAbajo;
+    });
+    for (const c of candidatos) {
+      const id = 'c' + Math.random().toString(36).slice(2, 8);
+      c.dataset.carruselId = id; c.dataset.carruselVisto = '1';
+      const antes = [c.scrollLeft, c.scrollTop];
+      const deLado = c.scrollWidth > c.clientWidth + 60;
+      if (deLado) c.scrollTo({ left: c.scrollLeft + c.clientWidth * 0.9, behavior: 'instant' });
+      else c.scrollTo({ top: c.scrollTop + c.clientHeight * 0.9, behavior: 'instant' });
+      await espera(500);
+      if (c.scrollLeft !== antes[0] || c.scrollTop !== antes[1]) return id;
+      // No se deslizó: se busca su botón «siguiente» cerca (dentro o en el contenedor de arriba).
+      const zona = c.parentElement?.parentElement || c.parentElement || c;
+      const boton = [...zona.querySelectorAll('button, [role=button], a')].find(b => {
+        const t = `${b.getAttribute('aria-label') || ''} ${b.title || ''} ${b.className || ''} ${(b.innerText || '').trim()}`;
+        const r = b.getBoundingClientRect();
+        return r.width > 0 && r.height > 0 && /(siguiente|next|›|→|❯|>$)/i.test(t) && !(b.tagName === 'A' && b.getAttribute('href') && !/^#/.test(b.getAttribute('href')));
+      });
+      if (boton) { boton.click(); await espera(900); return id; }
+    }
+    return null;
+  }, usados).catch(() => null);
+}
+
 async function medir(pagina) {
   return pagina.evaluate(() => {
     // Lo que tiene otra cosa encima (un menú pegado arriba, una barra) no se ve en la foto: no se señala.
@@ -263,9 +303,21 @@ async function medir(pagina) {
         && s.visibility !== 'hidden' && +s.opacity > 0.05 && destapado(e, r);
     };
     const elementos = [];
+    // Una imagen o video más alto que la pantalla nunca cabe entero: se señala la parte que se ve,
+    // si se ve al menos la mitad de la pantalla de alto.
+    const parteVisible = e => {
+      if (!/^(IMG|VIDEO)$/.test(e.tagName)) return null;
+      const r = e.getBoundingClientRect(), s = getComputedStyle(e);
+      if (r.height <= PISO || s.visibility === 'hidden' || +s.opacity <= 0.05) return null;
+      const arriba = Math.max(0, r.top), abajo = Math.min(PISO, r.bottom), izq = Math.max(0, r.left), der = Math.min(innerWidth, r.right);
+      if (abajo - arriba < PISO * 0.5 || der - izq < 60) return null;
+      const recorte = { left: izq, top: arriba, right: der, bottom: abajo, width: der - izq, height: abajo - arriba };
+      return destapado(e, recorte) ? recorte : null;
+    };
     document.querySelectorAll('h1,h2,h3,button,a,img,video,input,textarea,select,[role=button]').forEach(e => {
-      if (!visible(e)) return;
-      const r = e.getBoundingClientRect();
+      const recorte = parteVisible(e);
+      if (!recorte && !visible(e)) return;
+      const r = recorte || e.getBoundingClientRect();
       const texto = (e.innerText || e.alt || e.title || e.getAttribute('aria-label') || e.placeholder || '').trim().replace(/\s+/g, ' ');
       if (!texto && e.tagName !== 'IMG' && e.tagName !== 'VIDEO') return;
       // Una imagen que no cargó, o un enlace sin nada a la vista (carruseles), sería un recuadro vacío.
@@ -391,6 +443,7 @@ async function medir(pagina) {
     // Al bajar, el menú pegado arriba tapa la parte de arriba: cada paso baja menos para no perder datos.
     const menu = await altoMenuPegado(pagina);
     const paso = Math.max(600, 1080 - menu - 140);
+    const carruselesPagina = [];
     let posiciones;
     if (esArticulo) {
       const cuantas = Math.min(MAXIMO_CAPTURAS, Math.max(3, Math.floor(forma.alto / paso)));
@@ -436,6 +489,19 @@ async function medir(pagina) {
       if (!datos) break;
       resultado.paginas.push({ numero, direccion: pagina.url(), parte: parte + 1, archivo, ...datos });
       avance(Math.round(resultado.paginas.length / MAXIMO_CAPTURAS * 100), `Página ${numero}: ${datos.titulo.slice(0, 50)}`);
+      // Si en esta parte hay un carrusel con tarjetas escondidas, se corre y se saca otra foto (hasta 2 por página).
+      while (carruselesPagina.length < 2 && resultado.paginas.length < MAXIMO_CAPTURAS) {
+        const corrido = await correrCarrusel(pagina, carruselesPagina);
+        if (!corrido) break;
+        carruselesPagina.push(corrido);
+        await pagina.evaluate(() => Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 2000))])).catch(() => {});
+        const n2 = resultado.paginas.length + 1, archivo2 = `pagina-${n2}.jpg`;
+        await fotografiar(pagina, path.join(carpeta, 'capturas', archivo2));
+        const datos2 = await medir(pagina).catch(() => null);
+        if (!datos2) break;
+        resultado.paginas.push({ numero: n2, direccion: pagina.url(), parte: parte + 1, archivo: archivo2, carrusel: true, ...datos2 });
+        avance(Math.round(resultado.paginas.length / MAXIMO_CAPTURAS * 100), `Página ${n2}: carrusel de ${datos2.titulo.slice(0, 40)}`);
+      }
     }
     if (esArticulo) { resultado.articulo = true; break; }
     // Enlaces internos: primero menú, cabecera y pie; sin parámetros ni archivos.
