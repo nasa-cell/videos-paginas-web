@@ -481,3 +481,108 @@ h1 { text-wrap: balance; }
   #estudio { padding-bottom: 70px; }
 }
 @media (min-width: 600px) and (max-width: 900px) { .tarjeta-voces .voces { grid-template-columns: repeat(8, 1fr); } }
+
+/* ---------- Equipos de pocos recursos: sin efectos pesados ---------- */
+.liviano .tarjeta, .liviano .campo, .liviano .trabajo, .liviano .pregunta-borrar, .liviano dialog::backdrop { backdrop-filter: none; -webkit-backdrop-filter: none; }
+.liviano body::after { display: none; }
+.liviano body { background-attachment: scroll; }
+.liviano body::before { position: absolute; }
+.liviano *, .liviano *::before, .liviano *::after { animation-iteration-count: 1 !important; }
+
+/* ---------- Almacén: solo las tarjetas que caben, con «‹ Atrás / Siguiente ›» ---------- */
+.pagina-almacen { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; color: var(--suave); font-size: 14px; }
+.pagina-almacen b { color: var(--texto); margin-right: auto; font-variant-numeric: tabular-nums; }
+.pagina-almacen button { border: 1.5px solid var(--borde); background: var(--tarjeta); color: var(--texto); border-radius: 12px; padding: 7px 14px; font-weight: 600; }
+.pagina-almacen button:last-child { background: var(--principal); border-color: var(--principal); color: #fff; }
+.pagina-almacen button:disabled { opacity: .4; cursor: default; }
+
+/* ---------- PC (P2): enlace arriba y tres tarjetas iguales que llenan la pantalla ---------- */
+@media (min-width: 901px) {
+  .todo { max-width: none; min-height: 100vh; display: flex; flex-direction: column; padding: clamp(14px, 2.2vh, 30px) clamp(24px, 3vw, 72px); }
+  .marca { font-size: clamp(21px, 1.3vw, 28px); }
+  .pestanas-sitio { margin-top: clamp(10px, 1.6vh, 20px); }
+  .pestanas-sitio a { font-size: clamp(15px, .9vw, 19px); }
+  #estudio:not([hidden]), #vistaAlmacen:not([hidden]) { flex: 1; display: flex; flex-direction: column; }
+  #estudio .cuerpo { flex: 1; margin-top: clamp(10px, 2vh, 26px); display: grid; align-items: start;
+    grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto auto auto auto 1fr;
+    grid-template-areas: "tit tit tit" "campo campo campo" "err err res" "voces dur creando" "voces subir creando";
+    gap: clamp(12px, 1.8vh, 24px) clamp(16px, 1.6vw, 30px); }
+  #estudio .cuerpo > div:first-child, #formVideo, .columna-derecha { display: contents; }
+  #estudio h1 { grid-area: tit; font-size: clamp(30px, 2.5vw, 56px); line-height: 1.1; }
+  #formVideo .campo { grid-area: campo; margin-top: 0; }
+  #formVideo .campo input { font-size: clamp(17px, 1.15vw, 24px); padding: clamp(12px, 1.4vh, 18px) 18px; }
+  #formVideo .crear { font-size: clamp(17px, 1.1vw, 23px); }
+  #errorVideo { grid-area: err; margin: -6px 0 0; }
+  #errorVideo:empty { display: none; }
+  .tarjeta-voces { grid-area: voces; align-self: stretch; display: flex; flex-direction: column; padding: clamp(16px, 2vh, 28px) clamp(16px, 1.3vw, 26px); }
+  .grupo-dur { grid-area: dur; margin: 0; background: var(--tarjeta); border: 1.5px solid var(--borde); border-radius: 22px; padding: clamp(14px, 1.8vh, 24px) clamp(16px, 1.3vw, 26px); }
+  .subir { grid-area: subir; margin: 0; border-radius: 22px; align-self: stretch; display: flex; flex-direction: column; }
+  .subir .miniaturas { flex: 1; align-content: start; }
+  #resumen { grid-area: res; margin: -4px 0 0; font-size: clamp(14px, .9vw, 18px); text-align: right; }
+  .creando { grid-area: creando; align-self: stretch; padding: clamp(16px, 2vh, 28px) clamp(16px, 1.3vw, 26px); }
+  .tarjeta-voces h2, .grupo-dur h2, .creando h2 { font-size: clamp(15px, 1vw, 20px); margin-bottom: clamp(10px, 1.4vh, 18px); color: var(--texto); }
+  .tarjeta-voces h2::before, .grupo-dur h2::before, .creando h2::before { color: var(--oro2); margin-right: 4px; }
+  .tarjeta-voces h2::before { content: "①"; } .grupo-dur h2::before { content: "②"; } .creando h2::before { content: "③"; }
+  .duracion { width: 100%; grid-template-columns: repeat(4, 1fr); } .marca-dorada { width: calc((100% - 10px) / 4); }
+  .duracion button { font-size: clamp(16px, 1.05vw, 22px); padding: clamp(8px, 1.2vh, 14px) 0; }
+  /* Voces: caritas en 4 columnas que crecen con la pantalla y se reparten hasta abajo */
+  .tarjeta-voces .voces { flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); align-content: space-evenly; gap: clamp(8px, 1.4vh, 20px) 4px; }
+  .voz, .voz.elegida { flex-direction: column; border: 0; background: none; box-shadow: none; border-radius: 0; }
+  .voz:hover { transform: none; }
+  .voz .elegir { flex-direction: column; gap: 5px; width: 100%; padding: 2px 0; font-size: clamp(12px, .8vw, 16px); font-weight: 400; border-radius: 0; color: var(--texto); }
+  .voz.elegida .elegir { color: var(--oro2); font-weight: 600; }
+  .voz i { width: clamp(44px, 3.3vw, 72px); height: clamp(44px, 3.3vw, 72px); font-size: clamp(16px, 1.2vw, 26px); border: 3px solid transparent; transition: border-color .2s, box-shadow .2s; }
+  .voz.elegida i { border-color: var(--oro); box-shadow: 0 0 0 3px rgba(245, 184, 61, .3); }
+  .voz .visto { display: none; }
+  .voz .oir, .voz.elegida .oir { position: absolute; top: calc(clamp(44px, 3.3vw, 72px) - 16px); left: calc(50% + clamp(8px, .7vw, 16px)); width: clamp(24px, 1.5vw, 32px); height: clamp(24px, 1.5vw, 32px); margin: 0; background: #fff; color: var(--principal); font-size: clamp(9px, .6vw, 12px); box-shadow: 0 2px 6px rgba(0, 0, 0, .4); }
+  .voz .oir:hover { background: #fff; color: var(--principal); }
+  .voz.sonando .oir { color: var(--oro); }
+  /* Almacén a lo ancho */
+  .almacen-cabeza { margin: clamp(10px, 2vh, 24px) 0 clamp(10px, 1.4vh, 16px); display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .almacen-cabeza h1 { font-size: clamp(28px, 2.2vw, 48px); }
+  .almacen-cabeza p { margin: 0; }
+  .rejilla { grid-template-columns: repeat(auto-fill, minmax(clamp(240px, 17vw, 380px), 1fr)); gap: clamp(12px, 1.4vw, 24px); }
+  /* Entrar y crear cuenta: a lo ancho, centrado de arriba a abajo */
+  #portada:not([hidden]) { flex: 1; margin-top: 0; align-items: center; gap: clamp(28px, 4vw, 90px); grid-template-columns: minmax(0, 1.1fr) minmax(360px, .9fr); }
+  #portada h1 { font-size: clamp(40px, 3.6vw, 80px); }
+  #portada .bajada { font-size: clamp(16px, 1.1vw, 23px); margin: clamp(10px, 1.6vh, 20px) 0; }
+  #portada .ventajas li { font-size: clamp(15px, 1vw, 21px); }
+  .acceso { padding: clamp(18px, 2.2vh, 30px); }
+  .pestanas { margin-bottom: 12px; }
+  .proveedores { grid-template-columns: 1fr 1fr; }
+  .separador { margin: 12px 0 2px; }
+  .campo-texto { margin-top: 8px; }
+  .campo-texto input { padding: clamp(10px, 1.3vh, 14px) 12px; font-size: 16px; }
+  .requisitos { margin-top: 8px; gap: 4px 12px; font-size: 12.5px; }
+  #formAcceso .principal { margin-top: 12px; padding: 12px; }
+}
+
+/* Un nombre largo de video ya no ensancha la página */
+.cuerpo > *, .columna-derecha > *, #enCurso, .trabajo, .trabajo .arriba { min-width: 0; }
+.trabajo .arriba .sitio { flex: 1; min-width: 0; }
+@media (max-width: 900px) {
+  .cuerpo, #estudio .cuerpo { grid-template-columns: minmax(0, 1fr); }
+  /* Videos creándose: en una tarjeta corta */
+  .trabajo { padding: 10px 12px 12px; margin-bottom: 8px; }
+  .trabajo .sitio { font-size: 13.5px; }
+  .trabajo .pasitos { display: none; }
+  .trabajo .fase { font-size: 12.5px; }
+  /* Crear cuenta más corta */
+  .proveedores { grid-template-columns: 1fr 1fr; } .proveedor { padding: 10px; gap: 8px; } .sin-bajo { display: none; }
+  .campo-texto { margin-top: 6px; }
+  .requisitos { font-size: 11.5px; gap: 3px 8px; margin-top: 6px; }
+}
+@media (min-width: 901px) {
+  .guardado { display: flex; flex-direction: column; }
+  .guardado .miniatura { flex: 1; aspect-ratio: auto; min-height: 90px; }
+}
+@media (min-width: 901px) {
+  /* Zona de capturas: un recuadro para soltar fotos, con el botón al centro */
+  .subir { justify-content: center; align-items: center; text-align: center; gap: 10px; padding: clamp(16px, 2vh, 28px); }
+  .subir-arriba { flex-direction: column; justify-content: center; gap: 8px; }
+  .subir-boton { font-size: clamp(15px, 1vw, 20px); padding: clamp(10px, 1.4vh, 16px) clamp(16px, 1.4vw, 26px); }
+  .subir .pista { max-width: 34ch; margin: 0 auto; font-size: clamp(13px, .85vw, 16px); }
+  .subir .miniaturas { flex: 0 1 auto; justify-content: center; }
+  .subir::before { content: "🖼"; font-size: clamp(30px, 2.6vw, 54px); line-height: 1; opacity: .85; }
+}
+.guardado.visto { animation: none; }

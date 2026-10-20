@@ -9,6 +9,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;600;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/recursos/estilos.css">
+<script>
+// Celulares y equipos de pocos recursos: sin los efectos que más pesan (desenfoque, ruido, fondo fijo).
+try { const m = navigator.deviceMemory, c = navigator.hardwareConcurrency;
+  if ((m && m <= 4) || (c && c <= 4) || matchMedia('(prefers-reduced-motion: reduce)').matches) document.documentElement.classList.add('liviano'); } catch {}
+</script>
 </head>
 <body>
 <div class="todo">
@@ -144,7 +149,7 @@
             <p class="pista" id="pistaSubir">Úsalo si la página pide iniciar sesión o si quieres mostrar algo especial: toma tú las capturas y súbelas o arrástralas aquí.</p>
             <div class="soltar-aqui" aria-hidden="true">Suelta aquí tus capturas</div>
           </div>
-          <div class="grupo"><h2>Duración</h2>
+          <div class="grupo grupo-dur"><h2>Duración</h2>
             <div class="duracion" id="duracion"><i class="marca-dorada"></i>
               <button type="button" data-min="1" aria-pressed="false">1 min<small>rápido</small></button>
               <button type="button" data-min="2" aria-pressed="true">2 min<small>normal</small></button>
@@ -180,6 +185,7 @@
           <span id="textoEspacio"></span>
         </div>
       </div>
+      <div class="pagina-almacen" id="paginaAlmacen" hidden><b id="textoPagina"></b><button type="button" id="almacenAtras">‹ Atrás</button><button type="button" id="almacenSiguiente">Siguiente ›</button></div>
       <div class="rejilla" id="guardados"></div>
       <div class="vacio almacen-vacio" id="almacenVacio">
         <p>Todavía no tienes videos. El primero aparecerá aquí cuando termine.</p>

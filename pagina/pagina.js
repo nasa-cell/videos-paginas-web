@@ -401,6 +401,7 @@
     document.querySelectorAll('#pestanasSitio a').forEach(a => a.dataset.vista === vista ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
     const visible = vista === 'crear' ? crear : almacen;
     if (animar && usuario) { visible.classList.remove('vista-entra'); void visible.offsetWidth; visible.classList.add('vista-entra'); }
+    if (vista === 'almacen' && usuario) requestAnimationFrame(paginarAlmacen);
   }
   document.addEventListener('click', e => {
     const a = e.target.closest('a[data-vista]');
@@ -412,6 +413,7 @@
 
   function mostrar() {
     $('#portada').hidden = !!usuario;
+    requestAnimationFrame(agrandarPortada);
     pintarVista(false);
     $('#usuario').hidden = !usuario;
     if (!usuario) return;
@@ -732,6 +734,73 @@
     no.focus();
   }
 
+  // El almacén muestra solo las tarjetas que caben en la pantalla; las demás con «‹ Atrás / Siguiente ›».
+  let paginaAlmacen = 1;
+  function paginarAlmacen() {
+    const caja = $('#guardados'), barra = $('#paginaAlmacen'), tarjetas = [...caja.children];
+    // Solo se cambia lo que cambió: mostrar y esconder de nuevo haría parpadear las tarjetas.
+    const poner = (t, esconder) => { if (t.hidden !== esconder) t.hidden = esconder; };
+    if (!tarjetas.length || $('#vistaAlmacen').hidden) { barra.hidden = true; return; }
+    const muestra = tarjetas.find(t => !t.hidden) || tarjetas[0];
+    poner(muestra, false);
+    barra.hidden = false;
+    // En la PC se elige cuántas columnas poner para que las filas llenen la pantalla hasta abajo.
+    caja.style.gridTemplateColumns = ''; caja.style.gridAutoRows = '';
+    let filasPC = 0;
+    if (window.innerWidth >= 901) {
+      // Se prueba de verdad cada cantidad de columnas y se queda la que deja menos espacio libre abajo.
+      const sep = parseFloat(getComputedStyle(caja).columnGap) || 16;
+      const disponible = window.innerHeight - caja.getBoundingClientRect().top - window.scrollY - 32;
+      let mejor = null;
+      for (let c = 2; c <= 10; c++) {
+        if ((caja.clientWidth - sep * (c - 1)) / c < 180) break;
+        caja.style.gridTemplateColumns = `repeat(${c}, minmax(0, 1fr))`;
+        const altoTarjeta = muestra.getBoundingClientRect().height;
+        const filas = Math.floor((disponible + sep) / (altoTarjeta + sep));
+        if (filas < 1) continue;
+        // Con pocos videos se usan solo las filas necesarias; cada fila puede crecer hasta 1,8 veces.
+        const usadas = Math.min(filas, Math.ceil(tarjetas.length / c));
+        const altoFila = Math.min(altoTarjeta * 1.8, (disponible - (usadas - 1) * sep) / usadas);
+        const sobra = disponible - usadas * altoFila - (usadas - 1) * sep;
+        // Se prefiere lo que llena hasta abajo sin estirar mucho las miniaturas y con más videos a la vista.
+        const puntaje = sobra + (altoFila / altoTarjeta - 1) * 400 - Math.min(c * filas, tarjetas.length) * 6;
+        if (!mejor || puntaje < mejor.puntaje) mejor = { c, sobra, filas, altoFila, puntaje };
+      }
+      caja.style.gridTemplateColumns = mejor ? `repeat(${mejor.c}, minmax(0, 1fr))` : '';
+      // Lo que sobra lo toman las miniaturas: las filas llegan justo hasta abajo.
+      if (mejor) { filasPC = mejor.filas; caja.style.gridAutoRows = `${Math.floor(mejor.altoFila)}px`; }
+    }
+    const estilo = getComputedStyle(caja);
+    const columnas = Math.max(1, estilo.gridTemplateColumns.split(' ').filter(Boolean).length);
+    const separacion = parseFloat(estilo.rowGap) || 16;
+    const alto = muestra.getBoundingClientRect().height;
+    const arriba = caja.getBoundingClientRect().top + window.scrollY;
+    const filas = filasPC || Math.max(1, Math.floor((window.innerHeight - arriba - 32 + separacion) / (alto + separacion)));
+    const porPagina = columnas * filas, paginas = Math.ceil(tarjetas.length / porPagina);
+    if (paginas <= 1) { barra.hidden = true; paginaAlmacen = 1; tarjetas.forEach(t => poner(t, false)); return; }
+    paginaAlmacen = Math.min(paginaAlmacen, paginas);
+    const desde = (paginaAlmacen - 1) * porPagina;
+    tarjetas.forEach((t, i) => poner(t, i < desde || i >= desde + porPagina));
+    $('#textoPagina').textContent = `${desde + 1}–${Math.min(desde + porPagina, tarjetas.length)} de ${tarjetas.length} videos`;
+    $('#almacenAtras').disabled = paginaAlmacen <= 1;
+    $('#almacenSiguiente').disabled = paginaAlmacen >= paginas;
+  }
+  $('#almacenAtras').addEventListener('click', () => { paginaAlmacen--; paginarAlmacen(); });
+  $('#almacenSiguiente').addEventListener('click', () => { paginaAlmacen++; paginarAlmacen(); });
+  // Entrar y crear cuenta en la PC: crecen con la pantalla para no dejar huecos arriba y abajo.
+  function agrandarPortada() {
+    const portada = $('#portada');
+    portada.style.zoom = '';
+    if (portada.hidden || window.innerWidth < 901) return;
+    const alto = Math.max(...[...portada.children].filter(x => !x.hidden).map(x => x.getBoundingClientRect().height));
+    const disponible = window.innerHeight - portada.getBoundingClientRect().top - 24;
+    const zoom = Math.min(1.7, disponible / alto, window.innerWidth / 1300);
+    if (zoom > 1.04) portada.style.zoom = zoom.toFixed(3);
+  }
+  $('#portada').addEventListener('click', () => setTimeout(agrandarPortada, 60));
+  let esperaTamano = null;
+  addEventListener('resize', () => { clearTimeout(esperaTamano); esperaTamano = setTimeout(() => { paginarAlmacen(); agrandarPortada(); }, 200); });
+
   function pintarAlmacen(lista, maximo) {
     const caja = $('#guardados');
     $('#almacenVacio').hidden = lista.length > 0;
@@ -750,6 +819,8 @@
         <div class="info"><b>${escapar(v.titulo || sitio(v.enlace))}</b><small>${escapar(sitio(v.enlace))} · ${escapar(nombreVoces(v.voces))}</small>
         <time class="fecha" datetime="${new Date(v.creado * 1000).toISOString()}">Creado el ${fecha(v.creado)}</time>
         <div class="botones"><a href="/api/videos/${v.id}/archivo?descargar=1">Descargar</a><button class="secundario" aria-label="Borrar">Borrar</button></div></div>`;
+      // Entra con animación una sola vez; al pasar de página ya no se repite.
+      t.addEventListener('animationend', () => t.classList.add('visto'), { once: true });
       t.querySelector('.miniatura').addEventListener('click', () => ver(v));
       t.querySelector('.secundario').addEventListener('click', () => preguntarBorrar(t, v));
       caja.appendChild(t);
@@ -758,6 +829,7 @@
     // Mismo orden que el servidor (el más nuevo primero); solo se mueve si cambió.
     const orden = lista.map(v => v.id);
     if ([...caja.children].map(t => t.dataset.id).join() !== orden.join()) orden.forEach(id => caja.appendChild(caja.querySelector(`[data-id="${id}"]`)));
+    paginarAlmacen();
   }
 
   const visor = $('#visor'), reproductor = $('#reproductor');
