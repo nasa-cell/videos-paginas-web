@@ -434,7 +434,7 @@
     const caja = $('#voces');
     caja.innerHTML = voces.map(v => `<span class="voz" data-clave="${v.clave}">
       <button type="button" class="elegir" aria-pressed="false"><i style="background:${escapar(v.color)}">${escapar(v.nombre[0])}</i>${escapar(v.nombre)}<span class="visto">✓</span></button>
-      <button type="button" class="oir" aria-label="Escuchar a ${escapar(v.nombre)}">▶</button></span>`).join('');
+      <button type="button" class="oir" aria-label="Escuchar a ${escapar(v.nombre)}">▶</button><span class="num-voz" aria-hidden="true"></span></span>`).join('');
     caja.querySelectorAll('.voz').forEach(el => {
       const clave = el.dataset.clave;
       el.querySelector('.elegir').addEventListener('click', () => {
@@ -458,6 +458,7 @@
       const si = elegidas.includes(el.dataset.clave);
       el.classList.toggle('elegida', si);
       el.querySelector('.elegir').setAttribute('aria-pressed', si);
+      el.querySelector('.num-voz').textContent = si ? elegidas.indexOf(el.dataset.clave) + 1 : '';
       if (tocada === el.dataset.clave && si) { el.classList.remove('salta'); void el.offsetWidth; el.classList.add('salta'); chispas(el); }
     });
     $('#chipsVoces').innerHTML = elegidas.map(c => voces.find(v => v.clave === c)).filter(Boolean)

@@ -586,3 +586,23 @@ h1 { text-wrap: balance; }
   .subir::before { content: "🖼"; font-size: clamp(30px, 2.6vw, 54px); line-height: 1; opacity: .85; }
 }
 .guardado.visto { animation: none; }
+
+/* ---------- Caritas de voces como botones 3D (opción C) ---------- */
+/* Celular (hoja de voces) y PC: borde negro, canto oscuro abajo y brillo arriba; al tocar se hunde. */
+@media (max-width: 900px) { .tarjeta-voces { --cara: 48px; } }
+@media (min-width: 901px) { .tarjeta-voces { --cara: clamp(44px, 3.3vw, 72px); } }
+.tarjeta-voces .voz i { width: var(--cara); height: var(--cara); border: 3px solid #000;
+  box-shadow: 0 5px 0 #000, inset 0 -5px 0 rgba(0, 0, 0, .18), inset 0 3px 0 rgba(255, 255, 255, .45);
+  transition: transform .12s, box-shadow .12s; }
+.tarjeta-voces .voz .elegir:active i { transform: translateY(3px); box-shadow: 0 2px 0 #000, inset 0 -3px 0 rgba(0, 0, 0, .18), inset 0 3px 0 rgba(255, 255, 255, .45); }
+.tarjeta-voces .voz.elegida i { border-color: #000; box-shadow: 0 5px 0 var(--oro), 0 0 0 3px var(--oro), inset 0 -5px 0 rgba(0, 0, 0, .18), inset 0 3px 0 rgba(255, 255, 255, .45); }
+.tarjeta-voces .voz .oir, .tarjeta-voces .voz.elegida .oir { top: calc(var(--cara) - 18px); background: var(--principal); color: #fff; border: 2.5px solid #000;
+  box-shadow: 0 4px 0 #000, inset 0 -3px 0 rgba(0, 0, 0, .25), inset 0 2px 0 rgba(255, 255, 255, .5); transition: transform .1s, box-shadow .1s; }
+.tarjeta-voces .voz .oir:hover { background: var(--principal2); color: #fff; }
+.tarjeta-voces .voz .oir:active { transform: translateY(3px); box-shadow: 0 1px 0 #000, inset 0 -2px 0 rgba(0, 0, 0, .25), inset 0 2px 0 rgba(255, 255, 255, .5); }
+.tarjeta-voces .voz.sonando .oir { color: var(--oro2); }
+/* Numerito 1 y 2: cuál voz habla primero */
+.num-voz { display: none; }
+.tarjeta-voces .voz.elegida .num-voz { display: grid; place-items: center; position: absolute; top: -6px; left: calc(50% - var(--cara) / 2 - 6px);
+  width: 22px; height: 22px; border-radius: 50%; background: var(--oro); color: var(--sobreoro); border: 2px solid #000; font-size: 11px; font-weight: 800; z-index: 1; }
+@media (prefers-reduced-motion: reduce) { .tarjeta-voces .voz i, .tarjeta-voces .voz .oir { transition: none; } }
