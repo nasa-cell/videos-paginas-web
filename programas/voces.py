@@ -1,9 +1,11 @@
 # Paso 3: graba la narración de cada escena con Fish Audio, solo con el modelo gratis.
 # Uso: python voces.py <carpeta del trabajo>
 # La clave se lee de la variable de entorno FISH_API_KEY. Si la API pide pago, se detiene.
-import json, os, subprocess, sys, time, urllib.error, urllib.request
+import hashlib, json, os, subprocess, sys, threading, time, urllib.error, urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
 MODELO = 's2.1-pro-free'
+VOCES_A_LA_VEZ = int(os.environ.get('VOCES_A_LA_VEZ', '3'))
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VOCES = json.load(open(os.path.join(RAIZ, 'voces.json'), encoding='utf-8'))
 FFMPEG = os.environ.get('FFMPEG', 'ffmpeg')
@@ -49,11 +51,27 @@ if __name__ == '__main__':
     os.makedirs(destino, exist_ok=True)
     guion = json.load(open(os.path.join(carpeta, 'guion.json'), encoding='utf-8'))
     total = len(guion['escenas'])
-    for n, escena in enumerate(guion['escenas'], 1):
-        mp3, wav = os.path.join(destino, f'e{n:02d}.mp3'), os.path.join(destino, f'e{n:02d}.wav')
+    hechas = []
+    candado = threading.Lock()
+
+    def una(n, escena):
+        # El mp3 se nombra por su texto y voz: si después se agregan escenas, las ya grabadas no se repiten.
+        firma = hashlib.sha1(f"{escena['voz']}|{escena['narracion']}".encode('utf-8')).hexdigest()[:16]
+        mp3, wav = os.path.join(destino, f'{firma}.mp3'), os.path.join(destino, f'e{n:02d}.wav')
         if not os.path.exists(mp3):
             open(mp3, 'wb').write(grabar(escena['narracion'], escena['voz']))
         subprocess.run([FFMPEG, '-v', 'error', '-y', '-i', mp3, '-ar', '44100', '-ac', '1', wav], check=True)
         escena['voz_segundos'] = round(duracion(wav), 3)
-        print(json.dumps({'avance': round(n / total * 100), 'texto': f'Voz {n} de {total}'}), flush=True)
+        with candado:
+            hechas.append(n)
+            print(json.dumps({'avance': round(len(hechas) / total * 100), 'texto': f'Voz {len(hechas)} de {total}'}), flush=True)
+
+    # Varias voces a la vez; si Fish pide esperar (429), grabar() reintenta.
+    try:
+        with ThreadPoolExecutor(max_workers=VOCES_A_LA_VEZ) as grupo:
+            for tarea in [grupo.submit(una, n, e) for n, e in enumerate(guion['escenas'], 1)]:
+                tarea.result()
+    except SystemExit as salida:
+        print(salida, file=sys.stderr, flush=True)
+        os._exit(1)
     json.dump(guion, open(os.path.join(carpeta, 'guion.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)

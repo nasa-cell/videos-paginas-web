@@ -38,8 +38,10 @@ PASOS = [
     ('Visitando la página', 0, 14, lambda c, v: [NODE, 'capturar.js', v['enlace'], c, str(capturas_para(v['minutos']))]
         + (['--subidas', os.path.join(SUBIDAS, v['id'])] if os.path.isdir(os.path.join(SUBIDAS, v['id'])) else [])),
     ('Escribiendo el guion', 14, 24, lambda c, v: [sys.executable, 'guion.py', c, v['voces'], str(v['minutos'])]),
-    ('Grabando las voces', 24, 40, lambda c, v: [sys.executable, 'voces.py', c]),
-    ('Preparando las escenas', 40, 42, lambda c, v: [sys.executable, 'armar.py', c]),
+    ('Grabando las voces', 24, 38, lambda c, v: [sys.executable, 'voces.py', c]),
+    # Si con las voces grabadas el video queda corto, se agregan escenas hasta llegar a los minutos pedidos.
+    ('Grabando las voces', 38, 41, lambda c, v: [sys.executable, 'guion.py', c, v['voces'], str(v['minutos']), '--alargar']),
+    ('Preparando las escenas', 41, 42, lambda c, v: [sys.executable, 'armar.py', c]),
     ('Haciendo la música', 42, 45, lambda c, v: [sys.executable, 'sonido.py', c]),
     ('Armando el video', 45, 100, lambda c, v: [NODE, 'grabar.js', c]),
 ]

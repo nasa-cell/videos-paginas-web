@@ -1,7 +1,7 @@
 # Paso 2: Gemini mira las capturas y el texto de la página y escribe el guion del video.
 # Uso: python guion.py <carpeta del trabajo> <voces separadas por coma> <minutos>
 # La clave se lee de la variable de entorno GEMINI_API_KEY.
-import base64, json, os, re, sys, time, urllib.error, urllib.request
+import base64, json, math, os, re, subprocess, sys, time, urllib.error, urllib.request
 
 MODELOS = ['gemini-flash-latest', 'gemini-flash-lite-latest']
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -289,26 +289,103 @@ def revisar(guion, contenido, claves):
     return sum(len(e['narracion'].split()) for e in escenas)
 
 
+def segundos_de(guion):
+    """Lo que durará el video con las voces ya grabadas (misma cuenta que armar.py)."""
+    from armar import ANTES, DESPUES, EXTRA
+    return sum(ANTES + e['voz_segundos'] + DESPUES + EXTRA.get(e['tipo'], 0) for e in guion['escenas'])
+
+
+def alargar(carpeta, claves, minutos):
+    """Después de grabar las voces: si el video queda corto (cada voz habla a su ritmo), Gemini escribe
+    escenas nuevas para antes del cierre y se graban solo esas voces. Hasta 2 vueltas."""
+    ruta = os.path.join(carpeta, 'guion.json')
+    meta = minutos * 60
+    for vuelta in range(2):
+        guion = json.load(open(ruta, encoding='utf-8'))
+        total = segundos_de(guion)
+        if total >= meta * 0.93:
+            break
+        habla = sum(e['voz_segundos'] for e in guion['escenas']) or 1
+        por_segundo = sum(len(e['narracion'].split()) for e in guion['escenas']) / habla
+        falta = meta - total
+        cuantas = max(1, math.ceil(falta / (25 / por_segundo + 1.2)))
+        palabras = round((falta - cuantas * 1.2) * por_segundo)
+        print(json.dumps({'avance': 20 + vuelta * 40, 'texto': f'Faltan {round(falta)} s: escribiendo {cuantas} escenas más'}), flush=True)
+        contenido, pedido = armar_pedido(carpeta, claves, minutos)
+        actuales = [{k: e.get(k) for k in ('tipo', 'voz', 'titulo', 'pagina', 'narracion')} for e in guion['escenas']]
+        pedido['contents'].append({'role': 'model', 'parts': [{'text': json.dumps({'escenas': actuales}, ensure_ascii=False)}]})
+        pedido['contents'].append({'role': 'user', 'parts': [{'text':
+            f'Con las voces grabadas el video dura {round(total)} segundos y debe durar {round(meta)}. Escribe SOLO {cuantas} '
+            f'escenas NUEVAS ("captura" o "puntos") que irán justo antes del cierre, sumando unas {palabras} palabras '
+            '(18 a 32 por escena). Cuenta cosas que el guion todavía NO dijo, sacadas de las capturas y su texto; en las '
+            '"captura" resalta partes que no se resaltaron antes. Mismas reglas y formato de escena. '
+            'Devuelve SOLO JSON: {"escenas": [...]}'}]})
+        try:
+            _, respuesta = pedir_gemini(pedido, leer_clave())
+        except SystemExit:
+            break
+        nuevas = [e for e in respuesta.get('escenas', []) if isinstance(e, dict) and e.get('tipo') in ('captura', 'puntos')]
+        if not nuevas:
+            break
+        # Se revisan como en el guion completo (entre la portada y el cierre, que no cambian).
+        prueba = {'escenas': [guion['escenas'][0], *nuevas, guion['escenas'][-1]], 'fondo': guion.get('fondo')}
+        revisar(prueba, contenido, claves)
+        nuevas = prueba['escenas'][1:-1]
+        guion['escenas'] = guion['escenas'][:-1] + nuevas + guion['escenas'][-1:]
+        json.dump(guion, open(ruta, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+        grabadas = subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'voces.py'), carpeta],
+                                  stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace')
+        if grabadas.returncode != 0:
+            sys.exit((grabadas.stderr.strip().splitlines() or ['No se pudieron grabar las voces nuevas.'])[-1])
+    guion = json.load(open(ruta, encoding='utf-8'))
+    print(json.dumps({'avance': 100, 'texto': f'{len(guion["escenas"])} escenas, {round(segundos_de(guion))} s'}))
+
+
 if __name__ == '__main__':
     sys.stdout.reconfigure(encoding='utf-8')
     carpeta, voces_texto, minutos = sys.argv[1], sys.argv[2], float(sys.argv[3])
     claves = [c for c in voces_texto.split(',') if c in VOCES][:2] or ['filo']
+    if '--alargar' in sys.argv:
+        alargar(carpeta, claves, minutos)
+        sys.exit(0)
     contenido, pedido = armar_pedido(carpeta, claves, minutos)
     modelo, guion = pedir_gemini(pedido, leer_clave())
-    # Las capturas que subió el usuario tienen que salir en el video: si Gemini dejó alguna, se le pide otra vez.
+    # Se revisa el guion: las capturas que subió el usuario tienen que salir y el largo tiene que
+    # alcanzar para los minutos pedidos. Si falla algo, se le pide a Gemini que lo corrija (hasta 2 veces).
+    meta = round(minutos * PALABRAS_POR_MINUTO)
+
     def faltan(g):
         usadas = {e.get('pagina') for e in g.get('escenas', []) if e.get('tipo') == 'captura'}
         return [p['numero'] for p in contenido['paginas'] if p.get('subida') and p['numero'] not in usadas]
-    if faltan(guion):
+
+    def palabras_de(g):
+        return sum(len(str(e.get('narracion', '')).split()) for e in g.get('escenas', []))
+
+    def problemas(g):
+        lista = []
+        if faltan(g):
+            lista.append(f'faltó usar las capturas del usuario {faltan(g)}: cada una necesita su propia escena "captura"')
+        if palabras_de(g) < meta * 0.88:
+            lista.append(f'la narración suma {palabras_de(g)} palabras y el video de {minutos:g} minuto(s) necesita unas {meta}: '
+                         f'agrega más escenas (alrededor de {escenas_para(minutos)} en total, de 18 a 32 palabras cada una) '
+                         'con datos e ideas NUEVAS de las capturas y su texto, sin repetir ni rellenar')
+        return lista
+
+    def puntaje(g):
+        return len(faltan(g)) * 1000 + max(0, meta - palabras_de(g))
+
+    for _ in range(2):
+        if not problemas(guion):
+            break
         pedido['contents'] += [{'role': 'model', 'parts': [{'text': json.dumps(guion, ensure_ascii=False)}]},
-                               {'role': 'user', 'parts': [{'text': f'Faltó usar las capturas del usuario {faltan(guion)}. Rehaz el guion completo '
-                                                                   'con las mismas reglas, y que cada una de esas capturas tenga su propia escena "captura".'}]}]
+                               {'role': 'user', 'parts': [{'text': 'Corrige el guion: ' + '; '.join(problemas(guion)) +
+                                                           '. Devuelve el guion COMPLETO con las mismas reglas.'}]}]
         try:
             modelo2, guion2 = pedir_gemini(pedido, leer_clave())
-            if len(faltan(guion2)) < len(faltan(guion)):
-                modelo, guion = modelo2, guion2
         except SystemExit:
-            pass
+            break
+        if puntaje(guion2) < puntaje(guion):
+            modelo, guion = modelo2, guion2
     palabras = revisar(guion, contenido, claves)
     guion.update({'modelo': modelo, 'voces': claves, 'minutos': minutos})
     json.dump(guion, open(os.path.join(carpeta, 'guion.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)

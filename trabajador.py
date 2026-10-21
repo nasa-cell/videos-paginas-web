@@ -16,16 +16,20 @@ os.environ['MODO_TRABAJO'] = 'github'
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from servidor import almacen, base, trabajos  # noqa: E402
 
-# Segundos de video que graba cada computadora; cada una más tarda ~2 min en prepararse.
-SEGUNDOS_POR_COMPUTADORA = 75
-MAX_COMPUTADORAS = 6
+# Segundos de video que graba cada computadora (cada una graba ~14 cuadros por segundo y tarda
+# ~40 s en prepararse). Los videos cortos se graban en la misma computadora que los preparó.
+SEGUNDOS_POR_COMPUTADORA = 40
+MAX_COMPUTADORAS = 8
+HASTA_SOLA = 80
 GRABAR = [p for p in trabajos.PASOS if p[0] == 'Armando el video']
 ANTES_DE_GRABAR = [p for p in trabajos.PASOS if p[0] != 'Armando el video']
 
 
 def computadoras_para(carpeta):
     duracion = json.load(open(os.path.join(carpeta, 'linea.json'), encoding='utf-8'))['duracion']
-    return max(1, min(MAX_COMPUTADORAS, round(duracion / SEGUNDOS_POR_COMPUTADORA)))
+    if duracion <= HASTA_SOLA:
+        return 1
+    return max(2, min(MAX_COMPUTADORAS, round(duracion / SEGUNDOS_POR_COMPUTADORA)))
 
 
 def salida_github(nombre, valor):
