@@ -6,7 +6,13 @@ import base64, json, math, os, re, subprocess, sys, time, urllib.error, urllib.r
 MODELOS = ['gemini-flash-latest', 'gemini-flash-lite-latest']
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VOCES = json.load(open(os.path.join(RAIZ, 'voces.json'), encoding='utf-8'))
-PALABRAS_POR_MINUTO = 118
+# Las voces de Fish dicen ~2,6 palabras por segundo; cada escena suma ~1,2 s de pausas y la
+# portada y el cierre ~4 s más. Con esto el guion sale del largo justo y casi nunca hay que alargarlo.
+PALABRAS_POR_SEGUNDO = 2.6
+
+
+def palabras_para(minutos):
+    return round((minutos * 60 - escenas_para(minutos) * 1.15 - 4) * PALABRAS_POR_SEGUNDO)
 FONDOS = ['aurora', 'galaxia', 'olas', 'neon', 'burbujas', 'comic', 'rayos',
           'lluvia', 'hexagonos', 'atardecer', 'cuaderno', 'fiesta', 'fuegos', 'geometria', 'ondas']
 TRANSICIONES = ['barrido', 'zoom', 'deslizar', 'giro', 'circulo', 'tinta', 'persianas', 'mosaico', 'falla', 'viaje', 'hoja', 'doble',
@@ -133,7 +139,7 @@ def instrucciones(claves, minutos):
     escenas = escenas_para(minutos)
     reemplazos = {'{MINUTOS}': str(minutos), '{QUIENES}': quienes, '{CLAVES}': ' | '.join(f'"{c}"' for c in claves),
                   '{FONDOS}': json.dumps(FONDOS), '{TRANSICIONES}': json.dumps(TRANSICIONES), '{LETRAS}': json.dumps(LETRAS),
-                  '{ESCENAS}': str(escenas), '{PALABRAS}': str(minutos * PALABRAS_POR_MINUTO)}
+                  '{ESCENAS}': str(escenas), '{PALABRAS}': str(palabras_para(minutos))}
     texto = INSTRUCCIONES
     for a, b in reemplazos.items():
         texto = texto.replace(a, b)
@@ -352,7 +358,7 @@ if __name__ == '__main__':
     modelo, guion = pedir_gemini(pedido, leer_clave())
     # Se revisa el guion: las capturas que subió el usuario tienen que salir y el largo tiene que
     # alcanzar para los minutos pedidos. Si falla algo, se le pide a Gemini que lo corrija (hasta 2 veces).
-    meta = round(minutos * PALABRAS_POR_MINUTO)
+    meta = palabras_para(minutos)
 
     def faltan(g):
         usadas = {e.get('pagina') for e in g.get('escenas', []) if e.get('tipo') == 'captura'}
