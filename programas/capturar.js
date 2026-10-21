@@ -49,11 +49,106 @@ function terminar(resultado, aviso) {
       titulo: 'Captura subida por el usuario', texto: '', elementos: [] });
   }
   if (!resultado.paginas.length) fallar('No se pudo sacar ninguna captura de la página.');
-  const conTexto = resultado.paginas.some(p => p.subida || p.texto.trim().length > 40 || p.elementos.length > 3);
+  const conTexto = resultado.paginas.some(p => p.subida || p.respaldo || p.texto.trim().length > 40 || p.elementos.length > 3);
   if (!conTexto) fallar('La página salió vacía. Puede que pida iniciar sesión: puedes subir tus propias capturas.');
   if (aviso) resultado.aviso = aviso;
+  // Aviso para el usuario: de dónde salieron las imágenes del video.
+  const tuyas = resultado.paginas.filter(p => p.subida).length, deLaPagina = resultado.paginas.length - tuyas;
+  const porLector = resultado.paginas.some(p => p.respaldo);
+  const tusCapturas = tuyas === 1 ? 'tu captura' : `tus ${tuyas} capturas`;
+  const suyas = deLaPagina === 1 ? '1 captura' : `${deLaPagina} capturas`;
+  resultado.nota = !tuyas ? (porLector ? `La página bloqueó al programa; se usaron ${suyas} tomadas con un lector público.` : '')
+    : !deLaPagina ? `Se usó solo ${tusCapturas}: la página no dejó sacar las suyas.`
+    : `Se combinó ${tusCapturas} con ${suyas} que el programa sacó de la página${porLector ? ' (con un lector público, porque la página bloquea al programa)' : ''}.`;
   fs.writeFileSync(path.join(carpeta, 'contenido.json'), JSON.stringify(resultado, null, 1));
-  console.log(JSON.stringify({ avance: 100, texto: aviso ? 'Se usarán tus capturas' : `${resultado.paginas.length} capturas` }));
+  const deTi = resultado.paginas.filter(p => p.subida).length;
+  console.log(JSON.stringify({ avance: 100, texto: deTi ? `${resultado.paginas.length - deTi} capturas de la página + ${deTi} tuyas` : `${resultado.paginas.length} capturas` }));
+}
+
+// Respaldo cuando la página no deja entrar al navegador del programa (por ejemplo Cloudflare
+// con las computadoras de GitHub): el lector público Jina (r.jina.ai, gratis) la abre desde sus
+// servidores y devuelve su texto y una foto. Cada foto alta se corta en dos capturas de 1920x1080.
+const ROBOT = /verify you are human|prove your humanity|real person|are you a robot|not a robot|captcha|access denied|attention required|just a moment|checking your browser|security check|unusual traffic|verifica que eres humano|demuestra que eres humano|no eres un robot|tráfico inusual|acceso denegado|verificación de seguridad|un momento|been blocked|blocked by|access to this page has been denied/i;
+const JINA = 'https://r.jina.ai/';
+async function pedirJina(direccion, formato) {
+  const respuesta = await fetch(JINA + direccion, { headers: { 'X-Return-Format': formato }, signal: AbortSignal.timeout(90000) });
+  if (!respuesta.ok) throw new Error(`Jina ${respuesta.status}`);
+  return formato === 'screenshot' ? Buffer.from(await respuesta.arrayBuffer()) : respuesta.text();
+}
+
+async function respaldo(resultado, faltan) {
+  if (faltan <= 0) return 0;
+  avance(10, 'La página bloquea al programa: se lee con un lector público');
+  const inicio = new URL(resultado.enlace);
+  const direcciones = [inicio.href];
+  const navegador = await abrirNavegador();
+  const lienzo = await navegador.newPage({ viewport: { width: 1920, height: 1080 } });
+  await lienzo.route('**/*', ruta => ruta.request().url().startsWith('data:') ? ruta.continue() : ruta.abort());
+  let hechas = 0;
+  try {
+    for (let i = 0; i < direcciones.length && hechas < faltan && i < 6; i++) {
+      let texto, foto;
+      try { [texto, foto] = await Promise.all([pedirJina(direcciones[i], 'markdown'), pedirJina(direcciones[i], 'screenshot')]); }
+      catch (error) { if (process.env.DEPURAR) console.error('respaldo', direcciones[i], error.message); continue; }
+      if (!foto || foto.length < 5000 || foto[0] !== 0x89) continue;
+      const titulo = ((texto.match(/^Title:[ 	]*(\S.*)$/m) || [])[1] || inicio.hostname).trim();
+      const cuerpo = texto.split(/Markdown Content:\s*/)[1] || texto;
+      // El lector también puede recibir la pantalla de bloqueo: esa no sirve.
+      if (ROBOT.test(titulo + ' ' + cuerpo.slice(0, 1500)) && cuerpo.length < 2500) continue;
+      // Otras páginas del mismo sitio, para tener más fotos si hacen falta.
+      if (i === 0) {
+        for (const [, otro] of cuerpo.matchAll(/\]\((https?:[^)\s]+)\)/g)) {
+          try {
+            const x = new URL(otro);
+            if (x.origin === inicio.origin && !x.search && !/\.(pdf|jpe?g|png|gif|svg|webp|zip|mp4|mp3|xml|json)$/i.test(x.pathname) &&
+                !/(login|signin|signup|logout|registr|cuenta|account|carrito|cart|checkout)/i.test(x.pathname) &&
+                !direcciones.some(d => normal(d) === normal(x.href))) direcciones.push(x.href);
+          } catch {}
+        }
+      }
+      const limpio = cuerpo.replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[#*_>|`]+/g, ' ').replace(/\s+/g, ' ').trim();
+      await lienzo.setContent(`<body style="margin:0;background:#fff"><img id="f" style="width:1920px;display:block" src="data:image/png;base64,${foto.toString('base64')}"></body>`);
+      const alto = await lienzo.evaluate(() => document.getElementById('f').decode().then(() => document.getElementById('f').offsetHeight)).catch(() => 0);
+      if (!alto) continue;
+      const cortes = alto > 1080 * 1.4 ? [0, alto - 1080] : [0];
+      for (let parte = 0; parte < cortes.length && hechas < faltan; parte++) {
+        await lienzo.evaluate(y => scrollTo(0, y), cortes[parte]);
+        // La parte de abajo se descarta si está casi en blanco (un solo color).
+        if (parte > 0) {
+          const variada = await lienzo.evaluate(y => {
+            const img = document.getElementById('f'), escala = img.naturalWidth / 1920;
+            const lienzo = Object.assign(document.createElement('canvas'), { width: 96, height: 54 }), c = lienzo.getContext('2d');
+            c.drawImage(img, 0, y * escala, img.naturalWidth, 1080 * escala, 0, 0, 96, 54);
+            const d = c.getImageData(0, 0, 96, 54).data;
+            let distintos = 0;
+            for (let k = 0; k < d.length; k += 4) if (Math.abs(d[k] - d[0]) + Math.abs(d[k + 1] - d[1]) + Math.abs(d[k + 2] - d[2]) > 30) distintos++;
+            return distintos / (d.length / 4) > 0.08;
+          }, cortes[parte]).catch(() => true);
+          if (!variada) continue;
+        }
+        const numero = resultado.paginas.length + 1, archivo = `pagina-${numero}.jpg`;
+        await lienzo.screenshot({ path: path.join(carpeta, 'capturas', archivo), type: 'jpeg', quality: 86 });
+        resultado.paginas.push({ numero, direccion: direcciones[i], parte: parte + 1, archivo, respaldo: true, titulo,
+          texto: limpio.slice(parte * 2500, parte * 2500 + 2500), elementos: [] });
+        hechas++;
+        avance(Math.round(Math.min(95, 10 + hechas / faltan * 85)), `Página ${numero}: ${titulo.slice(0, 50)}`);
+      }
+    }
+  } finally {
+    await navegador.close().catch(() => {});
+  }
+  return hechas;
+}
+
+// Si la página no dejó entrar, primero se prueba el lector público; si tampoco sale, se usan las capturas del usuario.
+async function cerrarConRespaldo(resultado, causa, detalle) {
+  fs.mkdirSync(path.join(carpeta, 'capturas'), { recursive: true });
+  let hechas = 0;
+  try { hechas = await respaldo(resultado, MAXIMO_CAPTURAS - resultado.paginas.length); }
+  catch (error) { if (process.env.DEPURAR) console.error('respaldo', error.message); }
+  if (hechas) return terminar(resultado, null);
+  if (SUBIDAS.length) return terminar(resultado, causa);
+  fallar(causa, detalle);
 }
 const avance = (porcentaje, texto) => console.log(JSON.stringify({ avance: porcentaje, texto }));
 
@@ -170,8 +265,15 @@ async function abrir(pagina, direccion) {
     catch { break; }
     await pagina.waitForLoadState('domcontentloaded', { timeout: 40000 }).catch(() => {});
   }
-  const texto = await pagina.evaluate(() => document.title + ' ' + (document.body && document.body.innerText || '').slice(0, 3000)).catch(() => '');
-  const ROBOT = /verify you are human|prove your humanity|real person|are you a robot|not a robot|captcha|access denied|attention required|just a moment|checking your browser|security check|unusual traffic|verifica que eres humano|demuestra que eres humano|no eres un robot|tráfico inusual|acceso denegado|verificación de seguridad|un momento/i;
+  const leer = () => pagina.evaluate(() => document.title + ' ' + (document.body && document.body.innerText || '').slice(0, 3000)).catch(() => '');
+  let texto = await leer();
+  // Pantallas tipo «Just a moment…» de Cloudflare: a veces se resuelven solas en unos segundos.
+  for (let espera = 0; espera < 6 && /just a moment|checking your browser|un momento|verificando/i.test(texto) && texto.length < 1800; espera++) {
+    avance(5, 'La página revisa el navegador, esperando…');
+    await pagina.waitForTimeout(3000);
+    texto = await leer();
+    if (respuesta && !/just a moment|checking your browser|un momento|verificando/i.test(texto)) estado = 200;
+  }
   if (estado === 404 || estado === 410) return { fallo: `Esa página no existe (código ${estado}). Revisa el enlace.`, detalle: texto.slice(0, 200) };
   if (estado >= 500) return { fallo: `La página no responde (código ${estado}). Puede estar caída o dormida; intenta en unos minutos.`, detalle: texto.slice(0, 200) };
   if (estado >= 400 || ROBOT.test(texto) && texto.length < 1800) {
@@ -423,6 +525,8 @@ async function medir(pagina) {
     if (abierta.fallo) {
       if (!resultado.paginas.length) {
         await navegador.close();
+        // Una dirección mal escrita, un 404 o un archivo no se arreglan con el lector público.
+        if (/no dejó entrar|tardó demasiado|No se pudo abrir|no responde/.test(abierta.fallo)) return cerrarConRespaldo(resultado, abierta.fallo, abierta.detalle);
         if (SUBIDAS.length) return terminar(resultado, abierta.fallo);
         fallar(abierta.fallo, abierta.detalle);
       }
@@ -519,11 +623,14 @@ async function medir(pagina) {
   }
   clearTimeout(reloj);
   await navegador.close();
-  // Si lo único que se vio fue una página vacía y hay capturas del usuario, se usan solo esas.
+  // Si lo único que se vio fue una página vacía, se prueba el lector público y, si no, las capturas del usuario.
   const vacia = !resultado.paginas.some(p => p.texto.trim().length > 40 || p.elementos.length > 3);
-  if (vacia && SUBIDAS.length) resultado.paginas = [];
-  terminar(resultado, vacia && SUBIDAS.length ? 'La página salió vacía sin cuenta' : null);
+  if (vacia) {
+    resultado.paginas = [];
+    return cerrarConRespaldo(resultado, 'La página salió vacía. Puede que pida iniciar sesión: puedes subir tus propias capturas.');
+  }
+  terminar(resultado, null);
 })().catch(error => {
-  if (SUBIDAS.length) { try { fs.mkdirSync(path.join(carpeta, 'capturas'), { recursive: true }); return terminar({ enlace, paginas: [] }, 'No se pudo recorrer la página'); } catch {} }
-  fallar('Falló al recorrer la página.', error.message);
+  return cerrarConRespaldo({ enlace, paginas: [] }, 'Falló al recorrer la página.', error.message)
+    .catch(() => fallar('Falló al recorrer la página.', error.message));
 });

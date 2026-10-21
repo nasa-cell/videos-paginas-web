@@ -118,6 +118,10 @@ def leer_clave():
     return clave
 
 
+def escenas_para(minutos):
+    return round(minutos * 6) + 2
+
+
 def instrucciones(claves, minutos):
     if len(claves) == 1:
         v = VOCES[claves[0]]
@@ -126,7 +130,7 @@ def instrucciones(claves, minutos):
         partes = ' y '.join(f'"{c}" ({VOCES[c]["nombre"]}: {VOCES[c]["caracter"]})' for c in claves)
         quienes = (f'Narran dos personajes de anime que se turnan y a veces se hablan por su nombre: {partes}. '
                    f'"{claves[0]}" presenta y cierra.')
-    escenas = round(minutos * 6) + 2
+    escenas = escenas_para(minutos)
     reemplazos = {'{MINUTOS}': str(minutos), '{QUIENES}': quienes, '{CLAVES}': ' | '.join(f'"{c}"' for c in claves),
                   '{FONDOS}': json.dumps(FONDOS), '{TRANSICIONES}': json.dumps(TRANSICIONES), '{LETRAS}': json.dumps(LETRAS),
                   '{ESCENAS}': str(escenas), '{PALABRAS}': str(minutos * PALABRAS_POR_MINUTO)}
@@ -139,15 +143,29 @@ def instrucciones(claves, minutos):
 def armar_pedido(carpeta, claves, minutos):
     contenido = json.load(open(os.path.join(carpeta, 'contenido.json'), encoding='utf-8'))
     partes = [{'text': instrucciones(claves, minutos)}]
+    capturas = len(contenido['paginas'])
+    if capturas < escenas_para(minutos) * 0.6:
+        # Pocas capturas para el tiempo pedido: se reparten en varias escenas con acercamientos distintos.
+        partes.append({'text': f"\nHAY SOLO {capturas} CAPTURAS para unas {escenas_para(minutos)} escenas. Usa cada captura en varias "
+                               'escenas "captura" (no seguidas si se puede), y en cada una resalta OTRA parte de la imagen (otro título, '
+                               'foto, botón o dato), así cada escena se ve distinta y aporta algo nuevo. Completa el tiempo con lo que '
+                               'cuentan las capturas y su texto; agrega escenas "puntos" para resumir, pero sin inventar datos.'})
+    if any(p.get('subida') for p in contenido['paginas']) and any(not p.get('subida') for p in contenido['paginas']):
+        partes.append({'text': '\nHay capturas de la página y capturas que subió el usuario: COMBÍNALAS en un solo recorrido ordenado; '
+                               'usa todas las del usuario (son lo que más le importa) y las de la página para completar. '
+                               f"OBLIGATORIO: cada captura del usuario ({', '.join(str(p['numero']) for p in contenido['paginas'] if p.get('subida'))}) "
+                               'aparece al menos en una escena "captura".'})
     if contenido.get('aviso'):
         partes.append({'text': f"\nNOTA: el programa no pudo ver la página por sí mismo ({contenido['aviso']}). "
                                "El video se hace con las capturas que subió el usuario; explica lo que se ve en ellas."})
     for p in contenido['paginas']:
-        if p.get('subida'):
-            partes.append({'text': f"\n=== CAPTURA {p['numero']} (subida por el usuario, 1920x1080): no trae lista de elementos. "
+        if p.get('subida') or p.get('respaldo'):
+            origen = 'subida por el usuario' if p.get('subida') else f"foto de {p['direccion']}, parte {p.get('parte', 1)}"
+            texto = f"\nTEXTO DE ESA PÁGINA:\n{p['texto'][:2500]}" if p.get('texto') else ''
+            partes.append({'text': f"\n=== CAPTURA {p['numero']} ({origen}, 1920x1080): no trae lista de elementos. "
                                    'Para resaltar algo de esta captura usa {"caja_1000": [ymin, xmin, ymax, xmax], "nota": "..."}, '
                                    'con la posición del objeto en la imagen normalizada de 0 a 1000 (como en detección de objetos). '
-                                   'Elige cosas que se vean claras: un título, un botón, una foto o un dato.'})
+                                   'Elige cosas que se vean claras: un título, un botón, una foto o un dato.' + texto})
         else:
             lista = '\n'.join(f"  {i + 1}. <{e['tipo']}> «{e['texto']}» caja {e['caja']}" for i, e in enumerate(p['elementos']))
             partes.append({'text': f"\n=== CAPTURA {p['numero']} (parte {p.get('parte', 1)}): {p['titulo']} ({p['direccion']})\nTEXTO:\n{p['texto'][:2500]}\nELEMENTOS:\n{lista}"})
@@ -238,7 +256,7 @@ def revisar(guion, contenido, claves):
                     if isinstance(m.get('elemento'), int) and 1 <= m['elemento'] <= len(p['elementos']):
                         elegido = buscar_dato(p['elementos'], p['elementos'][m['elemento'] - 1], str(m.get('nota', '')))
                         marcas.append({'caja': elegido['caja'], 'nota': str(m.get('nota', ''))[:28], 'tipo': elegido.get('tipo', '')})
-                    elif p.get('subida') and isinstance(m.get('caja_1000'), list) and len(m['caja_1000']) == 4 \
+                    elif (p.get('subida') or p.get('respaldo')) and isinstance(m.get('caja_1000'), list) and len(m['caja_1000']) == 4 \
                             and all(isinstance(v, (int, float)) for v in m['caja_1000']):
                         # Posición que Gemini vio en la imagen (0 a 1000), pasada a píxeles de 1920x1080 con un margen.
                         y0, x0, y1, x1 = [min(1000, max(0, float(v))) for v in m['caja_1000']]
@@ -277,6 +295,20 @@ if __name__ == '__main__':
     claves = [c for c in voces_texto.split(',') if c in VOCES][:2] or ['filo']
     contenido, pedido = armar_pedido(carpeta, claves, minutos)
     modelo, guion = pedir_gemini(pedido, leer_clave())
+    # Las capturas que subió el usuario tienen que salir en el video: si Gemini dejó alguna, se le pide otra vez.
+    def faltan(g):
+        usadas = {e.get('pagina') for e in g.get('escenas', []) if e.get('tipo') == 'captura'}
+        return [p['numero'] for p in contenido['paginas'] if p.get('subida') and p['numero'] not in usadas]
+    if faltan(guion):
+        pedido['contents'] += [{'role': 'model', 'parts': [{'text': json.dumps(guion, ensure_ascii=False)}]},
+                               {'role': 'user', 'parts': [{'text': f'Faltó usar las capturas del usuario {faltan(guion)}. Rehaz el guion completo '
+                                                                   'con las mismas reglas, y que cada una de esas capturas tenga su propia escena "captura".'}]}]
+        try:
+            modelo2, guion2 = pedir_gemini(pedido, leer_clave())
+            if len(faltan(guion2)) < len(faltan(guion)):
+                modelo, guion = modelo2, guion2
+        except SystemExit:
+            pass
     palabras = revisar(guion, contenido, claves)
     guion.update({'modelo': modelo, 'voces': claves, 'minutos': minutos})
     json.dump(guion, open(os.path.join(carpeta, 'guion.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)

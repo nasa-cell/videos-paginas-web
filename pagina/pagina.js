@@ -631,7 +631,7 @@
       if (antes && antes !== v.estado && (v.estado === 'listo' || v.estado === 'error') && !leer('avisado-' + v.id)) {
         guardar('avisado-' + v.id, '1');
         if (v.estado === 'listo') {
-          campanita(); avisar(`¡Tu video de ${v.titulo || sitio(v.enlace)} está listo! Míralo en «Mi almacén».`);
+          campanita(); avisar(`¡Tu video de ${v.titulo || sitio(v.enlace)} está listo! Míralo en «Mi almacén».${v.mensaje ? ' ' + v.mensaje : ''}`);
           if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification('Tu video está listo', { body: v.titulo || sitio(v.enlace) });
           const tarjeta = document.querySelector(`.guardado[data-id="${v.id}"]`);
           if (tarjeta) estrellitas(tarjeta);
@@ -817,7 +817,7 @@
       t.style.animationDelay = Math.min(i, 8) * .05 + 's';
       t.innerHTML = `<button class="miniatura" style="background-image:url('/api/videos/${v.id}/portada')" aria-label="Ver video">
           <span class="duracion-video">${reloj(v.duracion || 0)}</span></button>
-        <div class="info"><b>${escapar(v.titulo || sitio(v.enlace))}</b><small>${escapar(sitio(v.enlace))} · ${escapar(nombreVoces(v.voces))}</small>
+        <div class="info"><b>${escapar(v.titulo || sitio(v.enlace))}</b><small>${escapar(sitio(v.enlace))} · ${escapar(nombreVoces(v.voces))}${v.mensaje ? ` · <span class="nota-capturas" title="${escapar(v.mensaje)}">📷 ${/^Se combin/.test(v.mensaje) ? 'tus fotos + página' : /^Se usó solo/.test(v.mensaje) ? 'solo tus fotos' : 'lector público'}</span>` : ''}</small>
         <time class="fecha" datetime="${new Date(v.creado * 1000).toISOString()}">Creado el ${fecha(v.creado)}</time>
         <div class="botones"><a href="/api/videos/${v.id}/archivo?descargar=1">Descargar</a><button class="secundario" aria-label="Borrar">Borrar</button></div></div>`;
       // Entra con animación una sola vez; al pasar de página ya no se repite.
@@ -837,6 +837,7 @@
   function ver(v) {
     reproductor.src = `/api/videos/${v.id}/archivo`;
     $('#visorTitulo').textContent = v.titulo || sitio(v.enlace);
+    $('#visorTitulo').title = v.mensaje || '';
     $('#visorDescargar').href = `/api/videos/${v.id}/archivo?descargar=1`;
     visor.showModal(); reproductor.play().catch(() => {});
   }

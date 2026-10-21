@@ -48,6 +48,12 @@ CREATE TABLE IF NOT EXISTS pendientes (
   intentos INTEGER DEFAULT 0,
   enviado DOUBLE PRECISION NOT NULL
 );
+CREATE TABLE IF NOT EXISTS partes (
+  video_id TEXT NOT NULL,
+  parte INTEGER NOT NULL,
+  avance DOUBLE PRECISION DEFAULT 0,
+  PRIMARY KEY (video_id, parte)
+);
 CREATE TABLE IF NOT EXISTS codigos (
   correo TEXT PRIMARY KEY,
   codigo_hash TEXT NOT NULL,

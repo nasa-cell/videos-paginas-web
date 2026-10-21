@@ -1,4 +1,8 @@
 # Hace un video cuando el servidor de la página lo pide.
+# 1) «preparar»: visita la página, escribe el guion, graba las voces y hace la música.
+#    Si el video es corto, lo graba ahí mismo y termina.
+# 2) «grabar»: si es largo, varias computadoras graban un pedazo cada una al mismo tiempo.
+# 3) «unir»: junta los pedazos con el sonido y guarda el video en el almacén.
 name: Crear video
 
 on:
@@ -13,53 +17,160 @@ run-name: Video ${{ inputs.video }}
 permissions:
   contents: read
 
+env:
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+  FISH_API_KEY: ${{ secrets.FISH_API_KEY }}
+  HF_TOKEN: ${{ secrets.HF_TOKEN }}
+  HF_ALMACEN: ${{ secrets.HF_ALMACEN }}
+  CALIDAD: '720'
+  PYTHONIOENCODING: utf-8
+  PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.navegadores
+
 jobs:
-  crear:
+  preparar:
     runs-on: ubuntu-24.04
     timeout-minutes: 75
-    env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      FISH_API_KEY: ${{ secrets.FISH_API_KEY }}
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
-      HF_ALMACEN: ${{ secrets.HF_ALMACEN }}
-      CALIDAD: '720'
-      PYTHONIOENCODING: utf-8
-      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.navegadores
+    outputs:
+      partes: ${{ steps.hacer.outputs.partes }}
+      total: ${{ steps.hacer.outputs.total }}
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: pip
-
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
-
       - name: Programas del sistema (ffmpeg y fuentes con emojis)
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends ffmpeg fonts-noto-color-emoji fonts-noto-core fonts-noto-cjk fonts-liberation
-
       - name: Dependencias
         run: |
           pip install -q -r requirements.txt
           npm ci --omit=dev --no-audit --no-fund
-
       - name: Guardar el navegador entre videos
         uses: actions/cache@v4
         with:
           path: .navegadores
           key: chromium-${{ hashFiles('package-lock.json') }}
-
       - name: Navegador
         run: npx playwright-core install --with-deps chromium
 
-      - name: Hacer el video
+      - name: Preparar el video
+        id: hacer
         run: python trabajador.py "${{ inputs.video }}"
+
+      - name: Pasar el trabajo a las otras computadoras
+        if: steps.hacer.outputs.partes != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: carpeta-${{ inputs.video }}
+          path: trabajos/${{ inputs.video }}
+          retention-days: 1
+
+      - name: Avisar si algo se cortó
+        if: failure() || cancelled()
+        run: python trabajador.py "${{ inputs.video }}" --fallo
+
+  grabar:
+    needs: preparar
+    if: needs.preparar.outputs.partes != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: true
+      matrix:
+        parte: ${{ fromJSON(needs.preparar.outputs.partes) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Programas del sistema (ffmpeg y fuentes con emojis)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends ffmpeg fonts-noto-color-emoji fonts-noto-core fonts-noto-cjk fonts-liberation
+      - name: Dependencias
+        run: |
+          pip install -q -r requirements.txt
+          npm ci --omit=dev --no-audit --no-fund
+      - name: Guardar el navegador entre videos
+        uses: actions/cache@v4
+        with:
+          path: .navegadores
+          key: chromium-${{ hashFiles('package-lock.json') }}
+      - name: Navegador
+        run: npx playwright-core install --with-deps chromium
+
+      - name: Traer el trabajo
+        uses: actions/download-artifact@v4
+        with:
+          name: carpeta-${{ inputs.video }}
+          path: trabajos/${{ inputs.video }}
+
+      - name: Grabar mi pedazo
+        run: python trabajador.py "${{ inputs.video }}" --parte "${{ matrix.parte }}/${{ needs.preparar.outputs.total }}"
+
+      - name: Entregar mi pedazo
+        uses: actions/upload-artifact@v4
+        with:
+          name: parte-${{ inputs.video }}-${{ matrix.parte }}
+          path: trabajos/${{ inputs.video }}/trozos/parte-${{ matrix.parte }}.mp4
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Avisar si algo se cortó
+        if: failure() || cancelled()
+        run: python trabajador.py "${{ inputs.video }}" --fallo
+
+  unir:
+    needs: [preparar, grabar]
+    if: needs.preparar.outputs.partes != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends ffmpeg
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Dependencias
+        run: |
+          pip install -q -r requirements.txt
+          npm ci --omit=dev --no-audit --no-fund
+
+      - name: Traer el trabajo
+        uses: actions/download-artifact@v4
+        with:
+          name: carpeta-${{ inputs.video }}
+          path: trabajos/${{ inputs.video }}
+
+      - name: Traer los pedazos
+        uses: actions/download-artifact@v4
+        with:
+          pattern: parte-${{ inputs.video }}-*
+          path: trabajos/${{ inputs.video }}/trozos
+          merge-multiple: true
+
+      - name: Unir y guardar
+        run: python trabajador.py "${{ inputs.video }}" --unir
 
       - name: Avisar si algo se cortó
         if: failure() || cancelled()

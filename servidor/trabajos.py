@@ -147,8 +147,9 @@ def _mensaje_de_error(carpeta, salida_error):
     return ultima[:220] or 'Algo falló al crear el video.'
 
 
-def _paso(vid, orden, entorno, desde, hasta, turno):
-    """Corre un programa del proceso y va pasando su avance a la base. Devuelve (código, errores)."""
+def _paso(vid, orden, entorno, desde, hasta, turno, avisar=None):
+    """Corre un programa del proceso y va pasando su avance a la base. Devuelve (código, errores).
+    avisar(porcentaje, texto): otra forma de anotar el avance (la usan los pedazos repartidos)."""
     if turno:
         turno.acquire()
     try:
@@ -174,6 +175,9 @@ def _paso(vid, orden, entorno, desde, hasta, turno):
                 continue
             if 'avance' in dato and time.time() - ultimo > 1:
                 ultimo = time.time()
+                if avisar:
+                    avisar(dato['avance'], dato.get('texto'))
+                    continue
                 _actualizar(vid, avance=round(desde + (hasta - desde) * dato['avance'] / 100, 1), mensaje=dato.get('texto'))
         proceso.wait()
         hilo.join(5)
@@ -183,21 +187,24 @@ def _paso(vid, orden, entorno, desde, hasta, turno):
             turno.release()
 
 
-def _correr(video):
+def _correr(video, pasos=None, empezar_de_cero=True, guardar=True, borrar_carpeta=True):
+    """Corre los pasos del video. En GitHub se puede correr solo una parte (pasos) y dejar la carpeta
+    para la siguiente computadora (borrar_carpeta=False). Devuelve True si todo salió bien."""
     vid = video['id']
     carpeta = os.path.join(CARPETA, vid)
-    shutil.rmtree(carpeta, ignore_errors=True)
+    if empezar_de_cero:
+        shutil.rmtree(carpeta, ignore_errors=True)
     os.makedirs(carpeta, exist_ok=True)
     entorno = {**os.environ, 'PYTHONIOENCODING': 'utf-8'}
     try:
-        for nombre, desde, hasta, orden in PASOS:
+        for nombre, desde, hasta, orden in (pasos or PASOS):
             if vid in _cancelados:
-                return
+                return False
             _actualizar(vid, estado='trabajando', fase=nombre, avance=desde, mensaje=None)
             for intento in range(1 + REINTENTOS.get(nombre, 0)):
                 codigo, errores = _paso(vid, orden(carpeta, video), entorno, desde, hasta, TURNOS.get(nombre))
                 if vid in _cancelados:
-                    return
+                    return False
                 if codigo == 0:
                     break
                 causa = _mensaje_de_error(carpeta, errores)
@@ -212,7 +219,9 @@ def _correr(video):
                     time.sleep(5)
                     continue
                 _actualizar(vid, estado='error', mensaje=causa, terminado=time.time())
-                return
+                return False
+        if not guardar:
+            return True
         # Guardar en el almacén del usuario
         guion = json.load(open(os.path.join(carpeta, 'guion.json'), encoding='utf-8'))
         video_mp4 = os.path.join(carpeta, 'video.mp4')
@@ -227,16 +236,24 @@ def _correr(video):
         borrar_subidas(vid)
         if MODO == 'github':
             almacen.borrar_capturas(vid)
-        _actualizar(vid, estado='listo', fase='Listo', avance=100, mensaje=None, titulo=str(guion.get('titulo', ''))[:80],
+        # Se guarda de dónde salieron las capturas (solo las del usuario, combinadas o con el lector público).
+        try:
+            nota = json.load(open(os.path.join(carpeta, 'contenido.json'), encoding='utf-8')).get('nota') or None
+        except (OSError, ValueError):
+            nota = None
+        _actualizar(vid, estado='listo', fase='Listo', avance=100, mensaje=nota, titulo=str(guion.get('titulo', ''))[:80],
                     duracion=round(duracion, 1), tamano=os.path.getsize(video_mp4), terminado=time.time())
+        return True
     except Exception as error:
         _actualizar(vid, estado='error', mensaje='Algo falló al crear el video: ' + str(error)[:150], terminado=time.time())
+        return False
     finally:
         with _candado:
             _procesos.pop(vid, None)
             _activos.discard(vid)
             _cancelados.discard(vid)
-        shutil.rmtree(carpeta, ignore_errors=True)
+        if borrar_carpeta:
+            shutil.rmtree(carpeta, ignore_errors=True)
 
 
 def _repartidor():
